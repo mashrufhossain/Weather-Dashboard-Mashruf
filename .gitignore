@@ -14,3 +14,6 @@ __pycache__/
 # Data and logs
 data/
 *.log
+
+# Class instructions
+instructions.md
