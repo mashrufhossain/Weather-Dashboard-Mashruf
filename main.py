@@ -83,6 +83,9 @@ class WeatherApp:
         city = self.city_entry.get().strip()
         self.refresh_display(city, self.last_weather if hasattr(self, "last_weather") else None)
         self.refresh_forecast(city)
+        self.refresh_history()
+        self.refresh_stats()
+
 
     def convert_temp(self, temp_c):
         return temp_c if self.temp_unit == "C" else temp_c * 9/5 + 32
@@ -242,21 +245,47 @@ class WeatherApp:
         if not stats:
             tk.Label(self.stats_frame_inner, text="No statistics available yet. Search for a city first!", font=NORMAL_FONT, fg="#fff", bg="black").pack(pady=24)
             return
+        
+        # Hottest
+        if stats['hottest_raw'] is not None:
+            hottest_temp = stats['hottest_raw']
+            if self.temp_unit == "F":
+                hottest_temp = hottest_temp * 9 / 5 + 32
+            hottest_str = f"{hottest_temp:.2f}°{self.temp_unit} in {stats['hottest_city']} ({stats['hottest_time']})"
+        else:
+            hottest_str = "N/A"
+
+        # Coldest
+        if stats['coldest_raw'] is not None:
+            coldest_temp = stats['coldest_raw']
+            if self.temp_unit == "F":
+                coldest_temp = coldest_temp * 9 / 5 + 32
+            coldest_str = f"{coldest_temp:.2f}°{self.temp_unit} in {stats['coldest_city']} ({stats['coldest_time']})"
+        else:
+            coldest_str = "N/A"
+
         # Top: icons, centered
         iconrow = tk.Frame(self.stats_frame_inner, bg="black")
         iconrow.pack(anchor="center", pady=(0, 16))
-        tk.Label(iconrow, text=f"🔥 Hottest: {stats['hottest']}", fg="#ffe047", font=NORMAL_FONT, bg="black").pack(side="left", padx=18)
-        tk.Label(iconrow, text=f"❄️ Coldest: {stats['coldest']}", fg="#bfffa5", font=NORMAL_FONT, bg="black").pack(side="left", padx=18)
+        tk.Label(iconrow, text=f"🔥 Hottest: {hottest_str}", fg="#ffe047", font=NORMAL_FONT, bg="black").pack(side="left", padx=18)
+        tk.Label(iconrow, text=f"❄️ Coldest: {coldest_str}", fg="#bfffa5", font=NORMAL_FONT, bg="black").pack(side="left", padx=18)
         tk.Label(iconrow, text=f"⛅ Strongest Wind: {stats['strongest_wind']}", fg="#79ff6b", font=NORMAL_FONT, bg="black").pack(side="left", padx=18)
         tk.Label(iconrow, text=f"💧 Most Humid: {stats['most_humid']}", fg="#43c0fa", font=NORMAL_FONT, bg="black").pack(side="left", padx=18)
 
         # Stats, centered vertically
         grid = tk.Frame(self.stats_frame_inner, bg="black")
         grid.pack(anchor="center", pady=(4, 0))
+        avg_temp = stats['avg_temp']
+        t_unit = "°C"
+        if self.temp_unit == "F":
+            avg_temp = avg_temp * 9 / 5 + 32
+            t_unit = "°F"
+        avg_temp_text = f"{avg_temp:.1f}{t_unit}"
+
         rows = [
             ("Total logs:", stats['log_count'], "#ffe047"),
             ("Most searched city:", stats['most_searched'], "#00e0ff"),
-            ("Average temperature:", f"{stats['avg_temp']:.1f}°C", "#ffe047"),
+            ("Average temperature:", avg_temp_text, "#ffe047"),
             ("Average humidity:", f"{stats['avg_humidity']}%", "#ffe047"),
             ("Average pressure:", f"{stats['avg_pressure']} hPa", "#ffe047"),
             ("Average wind speed:", f"{stats['avg_wind']:.2f} m/s", "#79ff6b"),
