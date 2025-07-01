@@ -154,6 +154,7 @@ class WeatherApp:
         city = city or self.city_entry.get().strip()
         if not city:
             self.forecast_header.config(text="Enter a city to view forecast.")
+            self.root.update_idletasks()
             return
         try:
             days = fetch_5day_forecast(city)
@@ -170,6 +171,7 @@ class WeatherApp:
             dayblock.grid(row=0, column=i, sticky="nsew", padx=28, ipadx=6, ipady=12)
             self.block_frame.columnconfigure(i, weight=1)
             self.forecast_blocks.append(dayblock)
+        self.root.update_idletasks()
 
     def _make_forecast_block(self, parent, day):
         color = "#ffe047"
@@ -229,6 +231,7 @@ class WeatherApp:
                 entry[4], entry[5], entry[6]
             )
             self.tree.insert("", "end", values=row, tags=('centered',))
+        self.root.update_idletasks()
 
     ### -------- HISTORY STATS TAB -------- ###
     def create_stats_tab(self):
