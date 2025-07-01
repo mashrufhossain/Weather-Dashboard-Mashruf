@@ -1,175 +1,281 @@
 import tkinter as tk
-from tkinter import ttk
-from api import get_weather
-from utils import save_to_csv
-from history import read_all_entries
-from stats import calculate_stats
-from comparison import compare_cities
-import csv
-from datetime import datetime
+from tkinter import ttk, messagebox
+from api import fetch_weather, fetch_5day_forecast
+from db import WeatherDB
+import os
 
-def save_to_csv(city, temp, description, file_path='history.csv'):
-    """Save weather data to CSV file with timestamp."""
-    with open(file_path, 'a', newline='') as file:
-        writer = csv.writer(file)
-        writer.writerow([datetime.now().isoformat(), city, temp, description])
+HEADER_FONT = ("Helvetica Neue", 18, "bold")
+NORMAL_FONT = ("Helvetica Neue", 12)
+SMALL_FONT = ("Helvetica Neue", 10)
+TITLE_COLOR = "#00e0ff"
 
-def fetch_and_display_weather(city_entry, weather_label, history_frame=None):
-    city = city_entry.get()
-    if not city:
-        weather_label.config(text="Please enter a city.")
-        return
-    data = get_weather(city)
-    if data.get("cod") != 200:
-        weather_label.config(text=f"Error: {data.get('message', 'City not found')}")
-    else:
-        temp = data["main"]["temp"]
-        description = data["weather"][0]["description"].capitalize()
-        weather_label.config(text=f"{city.title()}: {temp}°C, {description}")
-        save_to_csv(city, temp, description)
-        if history_frame:
-            update_history(history_frame)
+TAB_BG = "#222"  # darker so yellow stands out
+TAB_FG = "#fff"
+ACTIVE_TAB_BG = "#0ff3c3"
+ACTIVE_TAB_FG = "#111"
+HISTORY_FOOTER = "This tab shows all your previous weather history entries."
+STATS_FOOTER = "This tab summarizes your weather history with key statistics and records, calculated using SQL."
+FORECAST_FOOTER = "This tab displays predictive forecasts for the city you entered."
 
-def update_history(frame):
-    for widget in frame.winfo_children():
-        widget.destroy()
+def title_case(s):
+    return ' '.join([w.capitalize() for w in s.split()])
 
-    canvas = tk.Canvas(frame)
-    scrollbar = tk.Scrollbar(frame, orient="vertical", command=canvas.yview)
-    scrollable_frame = tk.Frame(canvas)
+class WeatherApp:
+    def __init__(self, root):
+        self.root = root
+        root.title("Weather Dashboard")
+        root.configure(bg="black")
+        root.geometry("1100x800")
+        root.minsize(900, 600)
 
-    scrollable_frame.bind(
-        "<Configure>",
-        lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-    )
+        self.db = WeatherDB(os.path.join("data", "weather.db"))
+        self.temp_unit = "C"  # default: Celsius
 
-    canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-    canvas.configure(yscrollcommand=scrollbar.set)
+        self.create_widgets()
+        self.create_forecast_tab()
+        self.create_history_tab()
+        self.create_stats_tab()
+        self.tabs.bind("<<NotebookTabChanged>>", self.on_tab_change)
+        self.refresh_forecast()
 
-    entries = read_all_entries()
-    if not entries:
-        tk.Label(scrollable_frame, text="No history found.").pack(padx=10, pady=10)
-    else:
-        for row in reversed(entries):  # newest at the top!
-            if len(row) < 4:
-                row += ["No description"]
-            timestamp, city, temp, desc = row
-            desc = desc.capitalize() if desc else "No description"
-            text = f"{timestamp} — {city.title()}: {temp}°C, {desc}"
-            tk.Label(scrollable_frame, text=text, anchor='w').pack(fill='x', padx=5, pady=2)
+    def create_widgets(self):
+        header = tk.Label(self.root, text="Welcome to the Weather Dashboard!", font=HEADER_FONT, fg="#fff", bg="black")
+        header.pack(pady=(24, 5))
 
-    canvas.pack(side="left", fill="both", expand=True)
-    scrollbar.pack(side="right", fill="y")
+        input_frame = tk.Frame(self.root, bg="black")
+        input_frame.pack()
+        tk.Label(input_frame, text="Enter city:", font=NORMAL_FONT, fg="#fff", bg="black").grid(row=0, column=0, padx=(0, 3))
+        self.city_entry = tk.Entry(input_frame, font=NORMAL_FONT, width=20)
+        self.city_entry.grid(row=0, column=1, padx=(0, 8))
+        get_btn = tk.Button(input_frame, text="Get Weather", font=NORMAL_FONT, command=self.get_weather)
+        get_btn.grid(row=0, column=2)
 
-def show_stats(frame):
-    for widget in frame.winfo_children():
-        widget.destroy()
+        # Unit toggle
+        self.unit_btn = tk.Button(
+            input_frame, text="Show °F", font=NORMAL_FONT,
+            fg="#222", bg="#ffe047", activeforeground="#fff", activebackground="#ffb200",
+            bd=1, relief="solid", width=8,
+            command=self.toggle_unit)
+        self.unit_btn.grid(row=0, column=3, padx=(8, 0))
 
-    stats = calculate_stats()
-    if not stats:
-        tk.Label(frame, text="No data available for statistics.").pack(padx=10, pady=10)
-        return
+        self.weather_display = tk.Label(self.root, text="", font=NORMAL_FONT, fg="#fff", bg="black", justify="left")
+        self.weather_display.pack(pady=(16, 2))
 
-    tk.Label(frame, text=f"Min Temp: {stats['min']}°C").pack(padx=10, pady=5)
-    tk.Label(frame, text=f"Max Temp: {stats['max']}°C").pack(padx=10, pady=5)
-    tk.Label(frame, text="Weather Counts:").pack(padx=10, pady=5)
+        # Tabs (Forecast, History, History Stats)
+        self.tabs = ttk.Notebook(self.root)
+        style = ttk.Style()
+        style.theme_use('default')
+        style.configure('TNotebook.Tab', background=TAB_BG, foreground=TAB_FG, font=NORMAL_FONT, padding=[8, 4])
+        style.map('TNotebook.Tab', background=[('selected', ACTIVE_TAB_BG)], foreground=[('selected', ACTIVE_TAB_FG)])
 
-    for desc, count in stats["counts"].items():
-        tk.Label(frame, text=f"{desc.capitalize()}: {count}").pack(padx=10, anchor='w')
+        self.forecast_frame = tk.Frame(self.tabs, bg="black")
+        self.tabs.add(self.forecast_frame, text="Forecast")
+        self.history_frame = tk.Frame(self.tabs, bg="black")
+        self.tabs.add(self.history_frame, text="History")
+        self.stats_frame = tk.Frame(self.tabs, bg="black")
+        self.tabs.add(self.stats_frame, text="History Statistics")
 
-def compare_cities_ui(frame, city1_entry, city2_entry, result_label):
-    city1 = city1_entry.get()
-    city2 = city2_entry.get()
+        self.tabs.pack(fill="both", expand=True, pady=(8, 0))
 
-    if not city1 or not city2:
-        result_label.config(text="Please enter both cities.")
-        return
+    def toggle_unit(self):
+        self.temp_unit = "F" if self.temp_unit == "C" else "C"
+        self.unit_btn.config(text=f"Show °{'C' if self.temp_unit == 'F' else 'F'}")
+        city = self.city_entry.get().strip()
+        self.refresh_display(city, self.last_weather if hasattr(self, "last_weather") else None)
+        self.refresh_forecast(city)
 
-    data1, data2 = compare_cities(city1, city2)
+    def convert_temp(self, temp_c):
+        return temp_c if self.temp_unit == "C" else temp_c * 9/5 + 32
 
-    if not data1 or not data2:
-        result_label.config(text="Error fetching data for one or both cities.")
-        return
+    def get_weather(self):
+        city = self.city_entry.get().strip()
+        if not city:
+            messagebox.showerror("Error", "Please enter a city name.")
+            return
+        try:
+            weather = fetch_weather(city)
+            self.last_weather = weather  # Save for unit switch
+        except Exception as e:
+            messagebox.showerror("Error", f"Could not fetch weather: {e}")
+            return
+        # Save to DB
+        self.db.insert_weather(
+            city=title_case(city),
+            temp=weather["temp"],
+            weather=title_case(weather["weather"]),
+            humidity=weather["humidity"],
+            pressure=weather["pressure"],
+            wind=weather["wind"]
+        )
+        self.refresh_display(city, weather)
+        self.refresh_history()
+        self.refresh_stats()
+        self.refresh_forecast(city)
 
-    text = (
-        f"{data1['city']}: {data1['temp']}°C, {data1['desc']}    "
-        f"{data2['city']}: {data2['temp']}°C, {data2['desc']}"
-    )
-    result_label.config(text=text)
+    def refresh_display(self, city, weather):
+        if not weather:
+            self.weather_display.config(text="")
+            return
+        temp = self.convert_temp(weather['temp'])
+        t_unit = "°C" if self.temp_unit == "C" else "°F"
+        info = (
+            f"{title_case(city)}\n"
+            "-----------------------------\n"
+            f"Temp:   {temp:.2f}{t_unit}\n"
+            f"Weather: {title_case(weather['weather'])}\n"
+            f"Humidity: {weather['humidity']}%\n"
+            f"Pressure: {weather['pressure']} hPa\n"
+            f"Wind:   {weather['wind']}"
+        )
+        self.weather_display.config(text=info)
 
-def main():
-    root = tk.Tk()
-    root.title("Weather Dashboard")
-    root.geometry("900x700")
+    ### -------- FORECAST TAB -------- ###
+    def create_forecast_tab(self):
+        self.forecast_inner = tk.Frame(self.forecast_frame, bg="black")
+        self.forecast_inner.pack(fill="both", expand=True, padx=0, pady=0)
+        self.forecast_blocks = []
+        self.forecast_header = tk.Label(self.forecast_inner, text="", font=NORMAL_FONT, fg="#ffe047", bg="black")
+        self.forecast_header.pack(pady=(18, 14))
+        # Horizontal container for forecast cards
+        self.block_frame = tk.Frame(self.forecast_inner, bg="black")
+        self.block_frame.pack(fill="x", expand=True)
+        # Footer (always visible)
+        self.forecast_footer = tk.Label(self.forecast_frame, text=FORECAST_FOOTER, font=SMALL_FONT, fg="#fff", bg="black")
+        self.forecast_footer.pack(side="bottom", pady=(0, 12))
 
-    label = tk.Label(root, text="Welcome to the Weather Dashboard!", font=("Helvetica", 16))
-    label.pack(pady=(10, 4))  # less space under main title
+    def refresh_forecast(self, city=None):
+        # Clear previous blocks
+        for widget in self.block_frame.winfo_children():
+            widget.destroy()
+        self.forecast_blocks.clear()
+        city = city or self.city_entry.get().strip()
+        if not city:
+            self.forecast_header.config(text="Enter a city to view forecast.")
+            return
+        try:
+            days = fetch_5day_forecast(city)
+        except Exception as e:
+            self.forecast_header.config(text=f"Could not fetch forecast: {e}")
+            return
+        self.forecast_header.config(
+            text=f"5-Day Forecast for {title_case(city)}:",
+            anchor="center", justify="center"
+        )
+        # Responsive block layout
+        for i, day in enumerate(days):
+            dayblock = self._make_forecast_block(self.block_frame, day)
+            dayblock.grid(row=0, column=i, sticky="nsew", padx=28, ipadx=6, ipady=12)
+            self.block_frame.columnconfigure(i, weight=1)
+            self.forecast_blocks.append(dayblock)
 
-    entry_frame = tk.Frame(root)
-    entry_frame.pack(pady=(0, 4))  # less space below city row
+    def _make_forecast_block(self, parent, day):
+        color = "#ffe047"
+        weather_main = day['weather'].lower()
+        if "clear" in weather_main:
+            icon = "☀️"
+        elif "cloud" in weather_main:
+            icon = "⛅"
+        elif "rain" in weather_main:
+            icon = "🌧️"
+        elif "storm" in weather_main or "thunder" in weather_main:
+            icon = "⛈️"
+        elif "snow" in weather_main:
+            icon = "❄️"
+        elif "haze" in weather_main:
+            icon = "🌫️"
+        else:
+            icon = "🌡️"
+        temp_min = self.convert_temp(day['temp_min'])
+        temp_max = self.convert_temp(day['temp_max'])
+        t_unit = "°C" if self.temp_unit == "C" else "°F"
+        f = tk.Frame(parent, bg="#222", bd=2, relief="ridge", padx=10, pady=9)
+        tk.Label(f, text=day['date'], font=("Helvetica Neue", 12, "bold"), fg=color, bg="#222").pack(pady=(2, 0))
+        tk.Label(f, text=f"{icon} {title_case(day['weather'])}", font=("Helvetica Neue", 12), fg="#fff", bg="#222").pack()
+        tk.Label(f, text=f"{temp_min:.1f}{t_unit} - {temp_max:.1f}{t_unit}", font=("Helvetica Neue", 12, "bold"), fg="#ffe047", bg="#222").pack(pady=(6, 0))
+        tk.Label(f, text=f"Humidity: {day['humidity']}%", font=("Helvetica Neue", 11), fg="#bfffa5", bg="#222").pack()
+        return f
 
-    tk.Label(entry_frame, text="Enter city:").pack(side=tk.LEFT)
-    city_entry = tk.Entry(entry_frame)
-    city_entry.pack(side=tk.LEFT, padx=5)
+    ### -------- HISTORY TAB -------- ###
+    def create_history_tab(self):
+        # Treeview table (always aligned)
+        columns = ("timestamp", "city", "temp", "weather", "humidity", "pressure", "wind")
+        self.tree = ttk.Treeview(self.history_frame, columns=columns, show="headings", height=18)
+        self.tree.pack(fill="both", expand=True, padx=12, pady=(14, 0))
+        style = ttk.Style()
+        style.configure("Treeview.Heading", font=("Helvetica Neue", 11, "bold"), background="#222")
+        style.configure("Treeview", font=NORMAL_FONT, rowheight=26, background="black", fieldbackground="black", foreground="white")
+        self.tree.tag_configure('centered', anchor='center')
+        for col in columns:
+            self.tree.heading(col, text=col.replace("_", " ").title())
+            self.tree.column(col, anchor="center", width=110)
+        self.history_footer = tk.Label(self.history_frame, text=HISTORY_FOOTER, font=SMALL_FONT, fg="#fff", bg="black")
+        self.history_footer.pack(side="bottom", pady=(0, 12))
 
-    fetch_button = tk.Button(entry_frame, text="Get Weather", command=lambda: fetch_and_display_weather(city_entry, weather_label, history_content_frame))
-    fetch_button.pack(side=tk.LEFT, padx=5)
+    def refresh_history(self):
+        for i in self.tree.get_children():
+            self.tree.delete(i)
+        entries = self.db.get_all_history()
+        if not entries:
+            self.tree.insert("", "end", values=["No history found."] + [""] * 6)
+            return
+        for entry in entries:
+            temp = self.convert_temp(entry[2])
+            t_unit = "°C" if self.temp_unit == "C" else "°F"
+            row = (
+                entry[0], entry[1], f"{temp:.2f}{t_unit}", entry[3],
+                entry[4], entry[5], entry[6]
+            )
+            self.tree.insert("", "end", values=row, tags=('centered',))
 
-    weather_label = tk.Label(root, text="", font=("Helvetica", 14))
-    weather_label.pack(pady=(0, 6))  # less space below current weather
+    ### -------- HISTORY STATS TAB -------- ###
+    def create_stats_tab(self):
+        self.stats_frame_inner = tk.Frame(self.stats_frame, bg="black")
+        self.stats_frame_inner.pack(expand=True, fill="both", pady=(14, 0))
+        self.stats_rows = []
+        self.stats_footer = tk.Label(self.stats_frame, text=STATS_FOOTER, font=SMALL_FONT, fg="#fff", bg="black")
+        self.stats_footer.pack(side="bottom", pady=(0, 12))
 
-    notebook = ttk.Notebook(root)
-    notebook.pack(expand=True, fill='both', pady=(5, 10))  # tighter above, still enough space below
+    def refresh_stats(self):
+        for w in self.stats_frame_inner.winfo_children():
+            w.destroy()
+        stats = self.db.get_stats()
+        if not stats:
+            tk.Label(self.stats_frame_inner, text="No statistics available yet. Search for a city first!", font=NORMAL_FONT, fg="#fff", bg="black").pack(pady=24)
+            return
+        # Top: icons, centered
+        iconrow = tk.Frame(self.stats_frame_inner, bg="black")
+        iconrow.pack(anchor="center", pady=(0, 16))
+        tk.Label(iconrow, text=f"🔥 Hottest: {stats['hottest']}", fg="#ffe047", font=NORMAL_FONT, bg="black").pack(side="left", padx=18)
+        tk.Label(iconrow, text=f"❄️ Coldest: {stats['coldest']}", fg="#bfffa5", font=NORMAL_FONT, bg="black").pack(side="left", padx=18)
+        tk.Label(iconrow, text=f"⛅ Strongest Wind: {stats['strongest_wind']}", fg="#79ff6b", font=NORMAL_FONT, bg="black").pack(side="left", padx=18)
+        tk.Label(iconrow, text=f"💧 Most Humid: {stats['most_humid']}", fg="#43c0fa", font=NORMAL_FONT, bg="black").pack(side="left", padx=18)
 
-    # History tab
-    frame1 = tk.Frame(notebook)
-    tk.Label(
-        frame1,
-        text="This tab shows all your previous weather history entries.",
-        font=("Helvetica", 14, "bold")
-    ).pack(pady=(10, 18))  # More space under header
+        # Stats, centered vertically
+        grid = tk.Frame(self.stats_frame_inner, bg="black")
+        grid.pack(anchor="center", pady=(4, 0))
+        rows = [
+            ("Total logs:", stats['log_count'], "#ffe047"),
+            ("Most searched city:", stats['most_searched'], "#00e0ff"),
+            ("Average temperature:", f"{stats['avg_temp']:.1f}°C", "#ffe047"),
+            ("Average humidity:", f"{stats['avg_humidity']}%", "#ffe047"),
+            ("Average pressure:", f"{stats['avg_pressure']} hPa", "#ffe047"),
+            ("Average wind speed:", f"{stats['avg_wind']:.2f} m/s", "#79ff6b"),
+        ]
+        for i, (k, v, color) in enumerate(rows):
+            tk.Label(grid, text=k, font=NORMAL_FONT, fg=color, bg="black", anchor="e", width=20).grid(row=i, column=0, sticky="e", pady=1, padx=(24, 8))
+            tk.Label(grid, text=v, font=NORMAL_FONT, fg="#fff", bg="black", anchor="w", width=32).grid(row=i, column=1, sticky="w", pady=1)
 
-    history_content_frame = tk.Frame(frame1)
-    history_content_frame.pack(fill="both", expand=True)
-    update_history(history_content_frame)
-
-    # History Statistics tab
-    frame2 = tk.Frame(notebook)
-    tk.Label(
-        frame2,
-        text="These statistics are calculated from your previous city weather searches.",
-        font=("Helvetica", 14, "bold")
-    ).pack(pady=(10, 18))
-
-    stats_content_frame = tk.Frame(frame2)
-    stats_content_frame.pack(fill="both", expand=True)
-    show_stats_button = tk.Button(frame2, text="Show Statistics", command=lambda: show_stats(stats_content_frame))
-    show_stats_button.pack(pady=5)
-
-    # Compare Cities tab
-    frame3 = tk.Frame(notebook)
-    tk.Label(
-        frame3,
-        text="Compare the current weather between two cities.",
-        font=("Helvetica", 14, "bold")
-    ).pack(pady=(10, 18))
-
-    tk.Label(frame3, text="City 1:").pack()
-    city1_entry = tk.Entry(frame3)
-    city1_entry.pack()
-    tk.Label(frame3, text="City 2:").pack()
-    city2_entry = tk.Entry(frame3)
-    city2_entry.pack()
-    result_label = tk.Label(frame3, text="", font=("Helvetica", 12))
-    result_label.pack(pady=10)
-    compare_button = tk.Button(frame3, text="Compare Cities", command=lambda: compare_cities_ui(frame3, city1_entry, city2_entry, result_label))
-    compare_button.pack(pady=5)
-
-    notebook.add(frame1, text="History")
-    notebook.add(frame2, text="History Statistics")
-    notebook.add(frame3, text="Compare Cities")
-
-    root.mainloop()
+    ### -------- TAB SWITCH -------- ###
+    def on_tab_change(self, event):
+        idx = self.tabs.index(self.tabs.select())
+        if idx == 0:
+            self.refresh_forecast(self.city_entry.get().strip())
+        elif idx == 1:
+            self.refresh_history()
+        elif idx == 2:
+            self.refresh_stats()
 
 if __name__ == "__main__":
-    main()
+    root = tk.Tk()
+    app = WeatherApp(root)
+    root.mainloop()
