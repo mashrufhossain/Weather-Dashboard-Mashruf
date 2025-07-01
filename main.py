@@ -4,10 +4,9 @@ from api import fetch_weather, fetch_5day_forecast
 from db import WeatherDB
 import os
 
-HEADER_FONT = ("Helvetica Neue", 18, "bold")
-NORMAL_FONT = ("Helvetica Neue", 12)
-SMALL_FONT = ("Helvetica Neue", 10)
-TITLE_COLOR = "#00e0ff"
+HEADER_FONT = ("Helvetica Neue", 32, "bold")
+NORMAL_FONT = ("Helvetica Neue", 16)
+SMALL_FONT = ("Helvetica Neue", 14)
 
 TAB_BG = "#222"  # darker so yellow stands out
 TAB_FG = "#fff"
@@ -39,7 +38,7 @@ class WeatherApp:
         self.refresh_forecast()
 
     def create_widgets(self):
-        header = tk.Label(self.root, text="Welcome to the Weather Dashboard!", font=HEADER_FONT, fg="#fff", bg="black")
+        header = tk.Label(self.root, text="What's in Your Sky?", font=HEADER_FONT, fg="#00e0ff", bg="black")
         header.pack(pady=(24, 5))
 
         input_frame = tk.Frame(self.root, bg="black")
@@ -244,40 +243,53 @@ class WeatherApp:
     def refresh_stats(self):
         for w in self.stats_frame_inner.winfo_children():
             w.destroy()
+
+        header_label = tk.Label(self.stats_frame_inner, text="SQL Statistics of Weather History", font=NORMAL_FONT, fg="#00e0ff", bg="black")
+        header_label.pack(pady=(10, 20))
+
+        # Get stats
         stats = self.db.get_stats()
         if not stats:
             tk.Label(self.stats_frame_inner, text="No statistics available yet. Search for a city first!", font=NORMAL_FONT, fg="#fff", bg="black").pack(pady=24)
             return
-        
+
         # Hottest
         if stats['hottest_raw'] is not None:
             hottest_temp = stats['hottest_raw']
             if self.temp_unit == "F":
                 hottest_temp = hottest_temp * 9 / 5 + 32
-            hottest_str = f"{hottest_temp:.2f}°{self.temp_unit} in {stats['hottest_city']} ({stats['hottest_time']})"
         else:
-            hottest_str = "N/A"
+            hottest_temp = 0
 
         # Coldest
         if stats['coldest_raw'] is not None:
             coldest_temp = stats['coldest_raw']
             if self.temp_unit == "F":
                 coldest_temp = coldest_temp * 9 / 5 + 32
-            coldest_str = f"{coldest_temp:.2f}°{self.temp_unit} in {stats['coldest_city']} ({stats['coldest_time']})"
         else:
-            coldest_str = "N/A"
+            coldest_temp = 0
 
-        # Top: icons, centered
-        iconrow = tk.Frame(self.stats_frame_inner, bg="black")
-        iconrow.pack(anchor="center", pady=(0, 16))
-        tk.Label(iconrow, text=f"🔥 Hottest: {hottest_str}", fg="#ffe047", font=NORMAL_FONT, bg="black").pack(side="left", padx=18)
-        tk.Label(iconrow, text=f"❄️ Coldest: {coldest_str}", fg="#bfffa5", font=NORMAL_FONT, bg="black").pack(side="left", padx=18)
-        tk.Label(iconrow, text=f"⛅ Strongest Wind: {stats['strongest_wind']}", fg="#79ff6b", font=NORMAL_FONT, bg="black").pack(side="left", padx=18)
-        tk.Label(iconrow, text=f"💧 Most Humid: {stats['most_humid']}", fg="#43c0fa", font=NORMAL_FONT, bg="black").pack(side="left", padx=18)
+        # Prepare wind value with unit
+        wind_value = stats['strongest_wind'].split(",")[0]
 
-        # Stats, centered vertically
-        grid = tk.Frame(self.stats_frame_inner, bg="black")
-        grid.pack(anchor="center", pady=(4, 0))
+        # Create summary grid
+        summary_grid = tk.Frame(self.stats_frame_inner, bg="black")
+        summary_grid.pack(anchor="center", pady=(4, 18))
+
+        summary_rows = [
+            ("🔥 Hottest", f"{hottest_temp:.2f}°{self.temp_unit}", stats['hottest_city'], stats['hottest_time']),
+            ("❄️ Coldest", f"{coldest_temp:.2f}°{self.temp_unit}", stats['coldest_city'], stats['coldest_time']),
+            ("⛅ Strongest Wind", wind_value, stats['strongest_wind'].split(" in ")[-1].split(" (")[0], stats['strongest_wind'].split("(")[-1][:-1]),
+            ("💧 Most Humid", stats['most_humid'].split("%")[0]+"%", stats['most_humid'].split(" in ")[-1].split(" (")[0], stats['most_humid'].split("(")[-1][:-1]),
+        ]
+
+        for i, (label, value, city, time) in enumerate(summary_rows):
+            tk.Label(summary_grid, text=label, font=NORMAL_FONT, fg="#fff", bg="black", anchor="w", width=16).grid(row=i, column=0, sticky="w", padx=(12, 8), pady=2)
+            tk.Label(summary_grid, text=value, font=NORMAL_FONT, fg="#ffe047", bg="black", anchor="w", width=10).grid(row=i, column=1, sticky="w", padx=8, pady=2)
+            tk.Label(summary_grid, text=city, font=NORMAL_FONT, fg="#43fad8", bg="black", anchor="w", width=18).grid(row=i, column=2, sticky="w", padx=8, pady=2)
+            tk.Label(summary_grid, text=time, font=NORMAL_FONT, fg="#ccc", bg="black", anchor="w", width=20).grid(row=i, column=3, sticky="w", padx=8, pady=2)
+
+        # Average temp formatting
         avg_temp = stats['avg_temp']
         t_unit = "°C"
         if self.temp_unit == "F":
@@ -285,17 +297,24 @@ class WeatherApp:
             t_unit = "°F"
         avg_temp_text = f"{avg_temp:.1f}{t_unit}"
 
+        # Detailed stats grid
+        grid = tk.Frame(self.stats_frame_inner, bg="black")
+        grid.pack(anchor="center", pady=(4, 0))
+
         rows = [
-            ("Total logs:", stats['log_count'], "#ffe047"),
-            ("Most searched city:", stats['most_searched'], "#00e0ff"),
-            ("Average temperature:", avg_temp_text, "#ffe047"),
-            ("Average humidity:", f"{stats['avg_humidity']}%", "#ffe047"),
-            ("Average pressure:", f"{stats['avg_pressure']} hPa", "#ffe047"),
-            ("Average wind speed:", f"{stats['avg_wind']:.2f} m/s", "#79ff6b"),
+            ("Total logs:", stats['log_count']),
+            ("Most searched city:", stats['most_searched']),
+            ("Average temperature:", avg_temp_text),
+            ("Average humidity:", f"{stats['avg_humidity']}%"),
+            ("Average pressure:", f"{stats['avg_pressure']} hPa"),
+            ("Average wind speed:", f"{stats['avg_wind']:.2f} m/s"),
         ]
-        for i, (k, v, color) in enumerate(rows):
-            tk.Label(grid, text=k, font=NORMAL_FONT, fg=color, bg="black", anchor="e", width=20).grid(row=i, column=0, sticky="e", pady=1, padx=(24, 8))
-            tk.Label(grid, text=v, font=NORMAL_FONT, fg="#fff", bg="black", anchor="w", width=32).grid(row=i, column=1, sticky="w", pady=1)
+
+        for i, (k, v) in enumerate(rows):
+            tk.Label(grid, text=k, font=NORMAL_FONT, fg="#ccc", bg="black", anchor="e", width=22).grid(row=i, column=0, sticky="e", pady=1, padx=(24, 8))
+            tk.Label(grid, text=v, font=NORMAL_FONT, fg="#fff", bg="black", anchor="w", width=24).grid(row=i, column=1, sticky="w", pady=1)
+
+
 
     ### -------- TAB SWITCH -------- ###
     def on_tab_change(self, event):
