@@ -38,7 +38,7 @@ class WeatherApp:
         self.refresh_forecast()
 
     def create_widgets(self):
-        header = tk.Label(self.root, text="What's in Your Sky?", font=HEADER_FONT, fg="#00e0ff", bg="black")
+        header = tk.Label(self.root, text="What's in Your Sky?", font=HEADER_FONT, fg="#7360ac", bg="black")
         header.pack(pady=(24, 5))
 
         input_frame = tk.Frame(self.root, bg="black")
@@ -200,19 +200,60 @@ class WeatherApp:
         return f
 
     ### -------- HISTORY TAB -------- ###
+    def treeview_sort_column(self, tv, col, reverse):
+        # Get values and row IDs
+        l = [(tv.set(k, col), k) for k in tv.get_children('')]
+        try:
+            # Try to convert to float for numeric columns (e.g., 25.2°C, 66%)
+            l.sort(key=lambda t: float(t[0].split()[0].replace("°C", "").replace("°F", "").replace("%", "").replace("m/s", "").replace("hPa", "")), reverse=reverse)
+        except ValueError:
+            # If not numeric, sort as strings
+            l.sort(reverse=reverse)
+        # Reorder rows
+        for index, (val, k) in enumerate(l):
+            tv.move(k, '', index)
+        # Set header to sort again in opposite order if clicked again
+        tv.heading(col, command=lambda: self.treeview_sort_column(tv, col, not reverse))
+
     def create_history_tab(self):
         # Treeview table (always aligned)
         columns = ("timestamp", "city", "temp", "weather", "humidity", "pressure", "wind")
         self.tree = ttk.Treeview(self.history_frame, columns=columns, show="headings", height=18)
         self.tree.pack(fill="both", expand=True, padx=12, pady=(14, 0))
+        
+        # Create style
         style = ttk.Style()
-        style.configure("Treeview.Heading", font=("Helvetica Neue", 11, "bold"), background="#222")
-        style.configure("Treeview", font=NORMAL_FONT, rowheight=26, background="black", fieldbackground="black", foreground="white")
+        style.theme_use("default")
+        
+        # Header style
+        style.configure("Treeview.Heading", 
+            font=("Helvetica Neue", 14, "bold"), 
+            background="#444",     # Lighter header background
+            foreground="#2ECBB4"      # White header text
+        )
+        
+        # Row style
+        style.configure("Treeview", 
+            font=NORMAL_FONT, 
+            rowheight=26, 
+            background="black", 
+            fieldbackground="black", 
+            foreground="white"
+        )
+
+        style.map("Treeview",
+            background=[('selected', '#555')],
+            foreground=[('selected', '#fff')]
+        )
+        
         self.tree.tag_configure('centered', anchor='center')
+        
         for col in columns:
-            self.tree.heading(col, text=col.replace("_", " ").title())
+            self.tree.heading(col, text=col.replace("_", " ").title(), command=lambda _col=col: self.treeview_sort_column(self.tree, _col, False))
             self.tree.column(col, anchor="center", width=110)
-        self.history_footer = tk.Label(self.history_frame, text=HISTORY_FOOTER, font=SMALL_FONT, fg="#fff", bg="black")
+
+
+        self.history_footer = tk.Label(self.history_frame, text=HISTORY_FOOTER, font=NORMAL_FONT, fg="#fff", bg="black")
         self.history_footer.pack(side="bottom", pady=(0, 12))
 
     def refresh_history(self):
@@ -244,7 +285,7 @@ class WeatherApp:
         for w in self.stats_frame_inner.winfo_children():
             w.destroy()
 
-        header_label = tk.Label(self.stats_frame_inner, text="SQL Statistics of Weather History", font=NORMAL_FONT, fg="#00e0ff", bg="black")
+        header_label = tk.Label(self.stats_frame_inner, text="SQL Statistics of Weather History", font=HEADER_FONT, fg="#7360ac", bg="black")
         header_label.pack(pady=(10, 20))
 
         # Get stats
