@@ -12,9 +12,9 @@ TAB_BG = "#222"  # darker so yellow stands out
 TAB_FG = "#fff"
 ACTIVE_TAB_BG = "#0ff3c3"
 ACTIVE_TAB_FG = "#111"
-HISTORY_FOOTER = "This tab shows all your previous weather history entries."
-STATS_FOOTER = "This tab summarizes your weather history with key statistics and records, calculated using SQL."
-FORECAST_FOOTER = "This tab displays predictive forecasts for the city you entered."
+HISTORY_FOOTER = "This tab shows all previous weather history entries. Columns can be sorted by clicking their headers."
+STATS_FOOTER = "This tab summarizes weather history with key statistics and records, calculated using SQL."
+FORECAST_FOOTER = "This tab displays predictive forecasts for the city entered."
 
 def title_case(s):
     return ' '.join([w.capitalize() for w in s.split()])
@@ -24,7 +24,7 @@ class WeatherApp:
         self.root = root
         root.title("Weather Dashboard")
         root.configure(bg="black")
-        root.geometry("1600x1000")
+        root.geometry("1900x1025")
         root.minsize(1400, 800)
 
         self.db = WeatherDB(os.path.join("data", "weather.db"))
@@ -230,16 +230,27 @@ class WeatherApp:
         # Get values and row IDs
         l = [(tv.set(k, col), k) for k in tv.get_children('')]
         try:
-            # Try to convert to float for numeric columns (e.g., 25.2°C, 66%)
-            l.sort(key=lambda t: float(t[0].split()[0].replace("°C", "").replace("°F", "").replace("%", "").replace("m/s", "").replace("hPa", "")), reverse=reverse)
+            l.sort(
+                key=lambda t: float(t[0].split()[0].replace("°C", "").replace("°F", "")
+                                .replace("%", "").replace("m/s", "").replace("hPa", "")),
+                reverse=reverse
+            )
         except ValueError:
-            # If not numeric, sort as strings
             l.sort(reverse=reverse)
+
         # Reorder rows
         for index, (val, k) in enumerate(l):
             tv.move(k, '', index)
-        # Set header to sort again in opposite order if clicked again
-        tv.heading(col, command=lambda: self.treeview_sort_column(tv, col, not reverse))
+
+        # Reset all headers to base text (no arrow)
+        for c in tv["columns"]:
+            base_text = c.replace("_", " ").title()
+            tv.heading(c, text=base_text, command=lambda _col=c: self.treeview_sort_column(tv, _col, False))
+
+        # Add arrow to active column
+        arrow = " ▲" if not reverse else " ▼"
+        tv.heading(col, text=col.replace("_", " ").title() + arrow,
+                command=lambda: self.treeview_sort_column(tv, col, not reverse))
 
     def create_history_tab(self):
         # Treeview table (always aligned)
@@ -277,8 +288,12 @@ class WeatherApp:
         
         for col in columns:
             self.tree.heading(col, text=col.replace("_", " ").title(), command=lambda _col=col: self.treeview_sort_column(self.tree, _col, False))
-            self.tree.column(col, anchor="center", width=110)
-
+            if col == "timestamp":
+                self.tree.column(col, anchor="center", width=180)  # wider for timestamp
+            elif col == "weather":
+                self.tree.column(col, anchor="center", width=150)  # slightly wider for weather
+            else:
+                self.tree.column(col, anchor="center", width=110)
 
         self.history_footer = tk.Label(self.history_frame, text=HISTORY_FOOTER, font=NORMAL_FONT, fg="#fff", bg="black")
         self.history_footer.pack(side="bottom", pady=(0, 12))
@@ -370,8 +385,8 @@ class WeatherApp:
         summary_rows = [
             ("🔥 Hottest", f"{hottest_temp:.2f}°{self.temp_unit}", stats['hottest_city'], stats['hottest_time']),
             ("❄️ Coldest", f"{coldest_temp:.2f}°{self.temp_unit}", stats['coldest_city'], stats['coldest_time']),
-            ("⛅ Strongest Wind", wind_value, stats['strongest_wind'].split(" in ")[-1].split(" (")[0], stats['strongest_wind'].split("(")[-1][:-1]),
-            ("💧 Most Humid", stats['most_humid'].split("%")[0]+"%", stats['most_humid'].split(" in ")[-1].split(" (")[0], stats['most_humid'].split("(")[-1][:-1]),
+            ("⛅ Strongest Wind", stats['strongest_wind'], stats['strongest_wind_city'], stats['strongest_wind_time']),
+            ("💧 Most Humid", stats['most_humid'], stats['most_humid_city'], stats['most_humid_time']),
         ]
 
         for i, (label, value, city, time) in enumerate(summary_rows):

@@ -68,8 +68,8 @@ class WeatherDB:
             hottest_time = h[2]
         else:
             hottest_raw = None
-            hottest_city = ""
-            hottest_time = ""
+            hottest_city = "N/A"
+            hottest_time = "N/A"
 
         # Coldest
         cur.execute("SELECT temp, city, timestamp FROM weather ORDER BY temp ASC LIMIT 1")
@@ -80,15 +80,22 @@ class WeatherDB:
             coldest_time = c[2]
         else:
             coldest_raw = None
-            coldest_city = ""
-            coldest_time = ""
+            coldest_city = "N/A"
+            coldest_time = "N/A"
 
         # Most humid
         cur.execute("SELECT humidity, city, timestamp FROM weather ORDER BY humidity DESC LIMIT 1")
         h2 = cur.fetchone()
-        most_humid = f"{h2[0]}% in {h2[1]} ({h2[2]})" if h2 else "N/A"
+        if h2:
+            most_humid_value = f"{h2[0]}%"
+            most_humid_city = h2[1]
+            most_humid_time = h2[2]
+        else:
+            most_humid_value = "N/A"
+            most_humid_city = "N/A"
+            most_humid_time = "N/A"
 
-        # Strongest wind (parse float from stored string)
+        # Strongest wind
         cur.execute("SELECT wind, city, timestamp FROM weather")
         entries = cur.fetchall()
         max_speed = 0.0
@@ -99,7 +106,6 @@ class WeatherDB:
             wind_str = e[0]
             if wind_str:
                 try:
-                    # Extract speed and direction
                     speed_part = wind_str.split()[0]
                     dir_part = wind_str.split(",")[1].strip() if "," in wind_str else "0°"
                     speed = float(speed_part)
@@ -111,11 +117,15 @@ class WeatherDB:
                     continue
 
         if wind_entry:
-            strongest_wind = f"{max_speed:.2f} m/s, {wind_dir} in {wind_entry[1]} ({wind_entry[2]})"
+            strongest_wind_value = f"{max_speed:.2f} m/s, {wind_dir}"
+            strongest_wind_city = wind_entry[1]
+            strongest_wind_time = wind_entry[2]
         else:
-            strongest_wind = "N/A"
+            strongest_wind_value = "N/A"
+            strongest_wind_city = "N/A"
+            strongest_wind_time = "N/A"
 
-        # Averages and most searched city
+        # Averages and most searched
         cur.execute("SELECT COUNT(*), AVG(temp), AVG(humidity), AVG(pressure), AVG(wind) FROM weather")
         row = cur.fetchone()
         log_count = row[0] or 0
@@ -135,8 +145,12 @@ class WeatherDB:
             "coldest_raw": coldest_raw,
             "coldest_city": coldest_city,
             "coldest_time": coldest_time,
-            "strongest_wind": strongest_wind,
-            "most_humid": most_humid,
+            "strongest_wind": strongest_wind_value,
+            "strongest_wind_city": strongest_wind_city,
+            "strongest_wind_time": strongest_wind_time,
+            "most_humid": most_humid_value,
+            "most_humid_city": most_humid_city,
+            "most_humid_time": most_humid_time,
             "log_count": log_count,
             "avg_temp": avg_temp,
             "avg_humidity": avg_humidity,
@@ -144,4 +158,5 @@ class WeatherDB:
             "avg_wind": avg_wind,
             "most_searched": most_searched
         }
+
 
