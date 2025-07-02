@@ -4,13 +4,13 @@ from api import fetch_weather, fetch_5day_forecast
 from db import WeatherDB
 import os
 
-HEADER_FONT = ("Helvetica Neue", 32, "bold")
+HEADER_FONT = ("Helvetica Neue", 34, "bold")
 NORMAL_FONT = ("Helvetica Neue", 16)
 SMALL_FONT = ("Helvetica Neue", 14)
 
-TAB_BG = "#222"  # darker so yellow stands out
+TAB_BG = "#222"
 TAB_FG = "#fff"
-ACTIVE_TAB_BG = "#0ff3c3"
+ACTIVE_TAB_BG = "#DEAFEE"
 ACTIVE_TAB_FG = "#111"
 HISTORY_FOOTER = "This tab shows all previous weather history entries. Columns can be sorted by clicking their headers."
 STATS_FOOTER = "This tab summarizes weather history with key statistics and records, calculated using SQL."
@@ -28,18 +28,17 @@ class WeatherApp:
         root.minsize(1400, 800)
 
         self.db = WeatherDB(os.path.join("data", "weather.db"))
-        self.temp_unit = "C"  # default: Celsius
+        self.temp_unit = "C"
 
         self.create_widgets()
         self.create_history_tab()
         self.create_stats_tab()
         self.create_forecast_tab()
         self.tabs.bind("<<NotebookTabChanged>>", self.on_tab_change)
-        self.refresh_forecast()
 
     def create_widgets(self):
-        header = tk.Label(self.root, text="What's in Your Sky?", font=HEADER_FONT, fg="#7360ac", bg="black")
-        header.pack(pady=(24, 5))
+        header = tk.Label(self.root, text="What's in Your Sky?", font=HEADER_FONT, fg="#DEAFEE", bg="black")
+        header.pack(pady=(24, 20))
 
         input_frame = tk.Frame(self.root, bg="black")
         input_frame.pack()
@@ -56,15 +55,23 @@ class WeatherApp:
             command=self.toggle_unit)
         self.unit_btn.grid(row=0, column=3, padx=(8, 0))
 
-        self.weather_display = tk.Label(self.root, text="", font=NORMAL_FONT, fg="#fff", bg="black", justify="left")
-        self.weather_display.pack(pady=(16, 2))
+        self.weather_info_frame = tk.Frame(self.root, bg="black")
+        self.weather_info_frame.pack(pady=(16, 2))
 
-        # Tabs (Forecast, History, History Stats)
         self.tabs = ttk.Notebook(self.root)
         style = ttk.Style()
         style.theme_use('default')
         style.configure('TNotebook.Tab', background=TAB_BG, foreground=TAB_FG, font=NORMAL_FONT, padding=[8, 4])
         style.map('TNotebook.Tab', background=[('selected', ACTIVE_TAB_BG)], foreground=[('selected', ACTIVE_TAB_FG)])
+
+        # Remove focus highlight from tabs
+        style.layout("TNotebook.Tab", [
+            ('Notebook.tab', {'sticky': 'nswe', 'children': [
+                ('Notebook.padding', {'side': 'top', 'sticky': 'nswe', 'children': [
+                    ('Notebook.label', {'side': 'top', 'sticky': ''})
+                ]})
+            ]})
+        ])
 
         self.forecast_frame = tk.Frame(self.tabs, bg="black")
         self.tabs.add(self.forecast_frame, text="Forecast")
@@ -74,13 +81,20 @@ class WeatherApp:
         self.tabs.add(self.stats_frame, text="History Statistics")
         self.tabs.pack(fill="both", expand=True, pady=(8, 0))
 
-
     def create_forecast_tab(self):
         self.forecast_inner = tk.Frame(self.forecast_frame, bg="black")
         self.forecast_inner.pack(fill="both", expand=True, padx=0, pady=0)
         self.forecast_blocks = []
-        self.forecast_header = tk.Label(self.forecast_inner, text="", font=NORMAL_FONT, fg="#ffe047", bg="black")
-        self.forecast_header.pack(pady=(18, 14))
+        self.forecast_header = tk.Label(
+            self.forecast_inner,
+            text="",
+            font=("Helvetica Neue", 34, "bold"),
+            fg="#ffe047",
+            bg="black",
+            anchor="center",
+            justify="center"
+        )
+        self.forecast_header.pack(pady=(20, 18))
         self.block_frame = tk.Frame(self.forecast_inner, bg="black")
         self.block_frame.pack(fill="x", expand=True)
         self.forecast_footer = tk.Label(self.forecast_frame, text=FORECAST_FOOTER, font=SMALL_FONT, fg="#fff", bg="black")
@@ -95,7 +109,6 @@ class WeatherApp:
         self.refresh_history()
         self.refresh_stats()
 
-
     def convert_temp(self, temp_c):
         return temp_c if self.temp_unit == "C" else temp_c * 9/5 + 32
 
@@ -106,34 +119,37 @@ class WeatherApp:
             return
         try:
             weather = fetch_weather(city)
-            self.last_weather = weather  # Save for unit switch
+            self.last_weather = weather
         except Exception as e:
             messagebox.showerror("Error", f"Could not fetch weather: {e}")
             return
-        # Save to DB
+
         self.db.insert_weather(
-        city=title_case(city),
-        temp=weather["temp"],
-        feels_like=weather["feels_like"],
-        weather=title_case(weather["weather"]),
-        humidity=weather["humidity"],
-        pressure=weather["pressure"],
-        visibility=weather["visibility"],
-        wind=weather["wind"],
-        sea_level=weather["sea_level"],
-        grnd_level=weather["grnd_level"],
-        sunrise=weather["sunrise"],
-        sunset=weather["sunset"]
-    )
-        # Refresh all displays
+            city=title_case(city),
+            temp=weather["temp"],
+            feels_like=weather["feels_like"],
+            weather=title_case(weather["weather"]),
+            humidity=weather["humidity"],
+            pressure=weather["pressure"],
+            visibility=weather["visibility"],
+            wind=weather["wind"],
+            sea_level=weather["sea_level"],
+            grnd_level=weather["grnd_level"],
+            sunrise=weather["sunrise"],
+            sunset=weather["sunset"]
+        )
+
         self.refresh_display(city, weather)
         self.refresh_history()
         self.refresh_stats()
         self.refresh_forecast(city)
 
     def refresh_display(self, city, weather):
+        # Clear previous content
+        for widget in self.weather_info_frame.winfo_children():
+            widget.destroy()
+
         if not weather:
-            self.weather_display.config(text="")
             return
 
         temp = self.convert_temp(weather['temp'])
@@ -141,38 +157,42 @@ class WeatherApp:
         t_unit = "°C" if self.temp_unit == "C" else "°F"
 
         visibility = weather.get("visibility", "N/A")
-        wind_gust = weather.get("wind_gust", "N/A")
-        sea_level = weather.get("sea_level", "N/A")
-        grnd_level = weather.get("grnd_level", "N/A")
-        sunrise = weather.get("sunrise", "N/A")
-        sunset = weather.get("sunset", "N/A")
-
-        # Convert visibility to km if numeric
         if visibility != "N/A" and isinstance(visibility, (int, float)):
             visibility_km = round(visibility / 1000, 1)
         else:
             visibility_km = "N/A"
 
-        info = (
-            f"{title_case(city)}\n"
-            "-----------------------------\n"
-            f"Temp: {temp:.2f}{t_unit}\n"
-            f"Feels like: {feels_like:.2f}{t_unit}\n"
-            f"Weather: {title_case(weather['weather'])}\n"
-            f"Humidity: {weather['humidity']}%\n"
-            f"Pressure: {weather['pressure']} hPa\n"
-            f"Visibility: {visibility_km} km\n"
-            f"Wind: {weather['wind']}\n"
-            f"Sea level: {sea_level} hPa\n"
-            f"Ground level: {grnd_level} hPa\n"
-            f"Sunrise: {sunrise}\n"
-            f"Sunset: {sunset}"
-        )
+        # Outer "card"
+        card = tk.Frame(self.weather_info_frame, bg="#222", bd=3, relief="ridge", padx=20, pady=14)
+        card.pack(pady=12)
 
-        self.weather_display.config(text=info)
+        # City name
+        tk.Label(card, text=title_case(city), font=("Helvetica Neue", 20, "bold"), fg="#ffe047", bg="#222").pack()
+
+        # Temp line
+        tk.Label(card, text=f"{temp:.1f}{t_unit} (Feels like: {feels_like:.1f}{t_unit})", font=("Helvetica Neue", 16), fg="#fff", bg="#222").pack()
+
+        # Condition
+        tk.Label(card, text=f"🌤️ {title_case(weather['weather'])}", font=("Helvetica Neue", 16), fg="#fff", bg="#222").pack(pady=(0, 6))
+
+        # Divider
+        tk.Label(card, text="──────────────", font=("Helvetica Neue", 12), fg="#555", bg="#222").pack(pady=4)
+
+        # First metrics row
+        row1 = tk.Frame(card, bg="#222")
+        row1.pack(pady=2)
+        tk.Label(row1, text=f"💧 Humidity: {weather['humidity']}%", font=("Helvetica Neue", 14), fg="#bfffa5", bg="#222").grid(row=0, column=0, padx=14, sticky="w")
+        tk.Label(row1, text=f"🌬️ Wind: {weather['wind']}", font=("Helvetica Neue", 14), fg="#43fad8", bg="#222").grid(row=0, column=1, padx=14, sticky="w")
+        tk.Label(row1, text=f"👁️ Visibility: {visibility_km} km", font=("Helvetica Neue", 14), fg="#a1e3ff", bg="#222").grid(row=0, column=2, padx=14, sticky="w")
+
+        # Second metrics row
+        row2 = tk.Frame(card, bg="#222")
+        row2.pack(pady=2)
+        tk.Label(row2, text=f"📄 Pressure: {weather['pressure']} hPa", font=("Helvetica Neue", 14), fg="#ffd580", bg="#222").grid(row=0, column=0, padx=14, sticky="w")
+        tk.Label(row2, text=f"🌅 Sunrise: {weather['sunrise']}", font=("Helvetica Neue", 14), fg="#ffacac", bg="#222").grid(row=0, column=1, padx=14, sticky="w")
+        tk.Label(row2, text=f"🌇 Sunset: {weather['sunset']}", font=("Helvetica Neue", 14), fg="#ffacac", bg="#222").grid(row=0, column=2, padx=14, sticky="w")
 
     def refresh_forecast(self, city=None):
-        # Clear previous blocks
         for widget in self.block_frame.winfo_children():
             widget.destroy()
         self.forecast_blocks.clear()
@@ -188,13 +208,11 @@ class WeatherApp:
             return
         self.forecast_header.config(
             text=f"5-Day Forecast for {title_case(city)}:",
-            font=HEADER_FONT,
-            anchor="center", justify="center"
+            anchor="center", justify="center", font=("Helvetica Neue", 34, "bold")
         )
-        # Responsive block layout
         for i, day in enumerate(days):
             dayblock = self._make_forecast_block(self.block_frame, day)
-            dayblock.grid(row=0, column=i, sticky="nsew", padx=28, ipadx=14, ipady=20)
+            dayblock.grid(row=0, column=i, sticky="nsew", padx=28, ipadx=14, ipady=80)
             self.block_frame.columnconfigure(i, weight=1)
             self.forecast_blocks.append(dayblock)
         self.root.update_idletasks()
@@ -223,28 +241,20 @@ class WeatherApp:
 
         f = tk.Frame(parent, bg="#222", bd=3, relief="ridge", padx=14, pady=12)
 
-        # Date — make large
-        tk.Label(f, text=day['date'], font=("Helvetica Neue", 16, "bold"), fg=color, bg="#222").pack(pady=(2, 0))
-        
-        # Weather line
-        tk.Label(f, text=f"{icon} {title_case(day['weather'])}", font=("Helvetica Neue", 16), fg="#fff", bg="#222").pack()
+        content = tk.Frame(f, bg="#222")
+        content.pack(expand=True)
 
-        # Divider space
-        tk.Label(f, text="----------------", font=("Helvetica Neue", 12), fg="#555", bg="#222").pack(pady=(4, 4))
-
-        # Temp range — same big size
-        tk.Label(f, text=f"{temp_min:.1f}{t_unit} - {temp_max:.1f}{t_unit}", font=("Helvetica Neue", 16, "bold"), fg="#ffe047", bg="#222").pack(pady=(0, 8))
-
-        # Bottom data points
-        tk.Label(f, text=f"Humidity: {day['humidity']}%", font=("Helvetica Neue", 15), fg="#bfffa5", bg="#222").pack()
-        tk.Label(f, text=f"Wind: {day.get('wind', 'N/A')}", font=("Helvetica Neue", 15), fg="#43fad8", bg="#222").pack()
-        tk.Label(f, text=f"Visibility: {day.get('visibility', 'N/A')} km", font=("Helvetica Neue", 15), fg="#a1e3ff", bg="#222").pack()
+        tk.Label(content, text=day['date'], font=("Helvetica Neue", 16, "bold"), fg=color, bg="#222").pack(pady=(2, 0), anchor="center")
+        tk.Label(content, text=f"{icon} {title_case(day['weather'])}", font=("Helvetica Neue", 16), fg="#fff", bg="#222").pack(anchor="center")
+        tk.Label(content, text="----------------", font=("Helvetica Neue", 12), fg="#555", bg="#222").pack(pady=(4, 4), anchor="center")
+        tk.Label(content, text=f"{temp_min:.1f}{t_unit} - {temp_max:.1f}{t_unit}", font=("Helvetica Neue", 16, "bold"), fg="#ffe047", bg="#222").pack(pady=(0, 8), anchor="center")
+        tk.Label(content, text=f"Humidity: {day['humidity']}%", font=("Helvetica Neue", 15), fg="#bfffa5", bg="#222").pack(anchor="center")
+        tk.Label(content, text=f"Wind: {day.get('wind', 'N/A')}", font=("Helvetica Neue", 15), fg="#43fad8", bg="#222").pack(anchor="center")
+        tk.Label(content, text=f"Visibility: {day.get('visibility', 'N/A')} km", font=("Helvetica Neue", 15), fg="#a1e3ff", bg="#222").pack(anchor="center")
 
         return f
 
-    ### -------- HISTORY TAB -------- ###
     def treeview_sort_column(self, tv, col, reverse):
-        # Get values and row IDs
         l = [(tv.set(k, col), k) for k in tv.get_children('')]
         try:
             l.sort(
@@ -255,62 +265,34 @@ class WeatherApp:
         except ValueError:
             l.sort(reverse=reverse)
 
-        # Reorder rows
         for index, (val, k) in enumerate(l):
             tv.move(k, '', index)
 
-        # Reset all headers to base text (no arrow)
         for c in tv["columns"]:
             base_text = c.replace("_", " ").title()
             tv.heading(c, text=base_text, command=lambda _col=c: self.treeview_sort_column(tv, _col, False))
 
-        # Add arrow to active column
         arrow = " ▲" if not reverse else " ▼"
         tv.heading(col, text=col.replace("_", " ").title() + arrow,
-                command=lambda: self.treeview_sort_column(tv, col, not reverse))
+                   command=lambda: self.treeview_sort_column(tv, col, not reverse))
 
     def create_history_tab(self):
-        # Treeview table (always aligned)
         columns = ("timestamp", "city", "temp", "feels_like", "weather", "humidity", "pressure",
-           "visibility", "wind", "sea_level", "grnd_level", "sunrise", "sunset")
+                   "visibility", "wind", "sea_level", "grnd_level", "sunrise", "sunset")
         self.tree = ttk.Treeview(self.history_frame, columns=columns, show="headings", height=18)
         self.tree.pack(fill="both", expand=True, padx=12, pady=(14, 0))
-        
-        # Create style
+
         style = ttk.Style()
         style.theme_use("default")
-        
-        # Header style
-        style.configure("Treeview.Heading", 
-            font=("Helvetica Neue", 14, "bold"), 
-            background="#444",     # Lighter header background
-            foreground="#2ECBB4"      # White header text
-        )
-        
-        # Row style
-        style.configure("Treeview", 
-            font=NORMAL_FONT, 
-            rowheight=26, 
-            background="black", 
-            fieldbackground="black", 
-            foreground="white"
-        )
+        style.configure("Treeview.Heading", font=("Helvetica Neue", 14, "bold"), background="#444", foreground="#DEAFEE")
+        style.configure("Treeview", font=NORMAL_FONT, rowheight=26, background="black", fieldbackground="black", foreground="white")
+        style.map("Treeview", background=[('selected', '#555')], foreground=[('selected', '#fff')])
 
-        style.map("Treeview",
-            background=[('selected', '#555')],
-            foreground=[('selected', '#fff')]
-        )
-        
         self.tree.tag_configure('centered', anchor='center')
-        
+
         for col in columns:
             self.tree.heading(col, text=col.replace("_", " ").title(), command=lambda _col=col: self.treeview_sort_column(self.tree, _col, False))
-            if col == "timestamp":
-                self.tree.column(col, anchor="center", width=180)  # wider for timestamp
-            elif col == "weather":
-                self.tree.column(col, anchor="center", width=150)  # slightly wider for weather
-            else:
-                self.tree.column(col, anchor="center", width=110)
+            self.tree.column(col, anchor="center", width=120)
 
         self.history_footer = tk.Label(self.history_frame, text=HISTORY_FOOTER, font=NORMAL_FONT, fg="#fff", bg="black")
         self.history_footer.pack(side="bottom", pady=(0, 12))
@@ -355,11 +337,9 @@ class WeatherApp:
             self.tree.insert("", "end", values=row, tags=('centered',))
         self.root.update_idletasks()
 
-    ### -------- HISTORY STATS TAB -------- ###
     def create_stats_tab(self):
         self.stats_frame_inner = tk.Frame(self.stats_frame, bg="black")
         self.stats_frame_inner.pack(expand=True, fill="both", pady=(14, 0))
-        self.stats_rows = []
         self.stats_footer = tk.Label(self.stats_frame, text=STATS_FOOTER, font=SMALL_FONT, fg="#fff", bg="black")
         self.stats_footer.pack(side="bottom", pady=(0, 12))
 
@@ -367,35 +347,20 @@ class WeatherApp:
         for w in self.stats_frame_inner.winfo_children():
             w.destroy()
 
-        header_label = tk.Label(self.stats_frame_inner, text="SQL Statistics of Weather History", font=HEADER_FONT, fg="#7360ac", bg="black")
+        header_label = tk.Label(self.stats_frame_inner, text="SQL Statistics of Weather History", font=HEADER_FONT, fg="#ffe047", bg="black")
         header_label.pack(pady=(10, 20))
 
-        # Get stats
         stats = self.db.get_stats()
         if not stats:
             tk.Label(self.stats_frame_inner, text="No statistics available yet. Search for a city first!", font=NORMAL_FONT, fg="#fff", bg="black").pack(pady=24)
             return
 
-        # Hottest
-        if stats['hottest_raw'] is not None:
-            hottest_temp = stats['hottest_raw']
-            if self.temp_unit == "F":
-                hottest_temp = hottest_temp * 9 / 5 + 32
-        else:
-            hottest_temp = 0
+        hottest_temp = stats['hottest_raw']
+        coldest_temp = stats['coldest_raw']
+        if self.temp_unit == "F":
+            hottest_temp = hottest_temp * 9 / 5 + 32
+            coldest_temp = coldest_temp * 9 / 5 + 32
 
-        # Coldest
-        if stats['coldest_raw'] is not None:
-            coldest_temp = stats['coldest_raw']
-            if self.temp_unit == "F":
-                coldest_temp = coldest_temp * 9 / 5 + 32
-        else:
-            coldest_temp = 0
-
-        # Prepare wind value with unit
-        wind_value = stats['strongest_wind'].split(",")[0]
-
-        # Create summary grid
         summary_grid = tk.Frame(self.stats_frame_inner, bg="black")
         summary_grid.pack(anchor="center", pady=(4, 18))
 
@@ -412,7 +377,6 @@ class WeatherApp:
             tk.Label(summary_grid, text=city, font=NORMAL_FONT, fg="#43fad8", bg="black", anchor="w", width=18).grid(row=i, column=2, sticky="w", padx=8, pady=2)
             tk.Label(summary_grid, text=time, font=NORMAL_FONT, fg="#ccc", bg="black", anchor="w", width=20).grid(row=i, column=3, sticky="w", padx=8, pady=2)
 
-        # Average temp formatting
         avg_temp = stats['avg_temp']
         t_unit = "°C"
         if self.temp_unit == "F":
@@ -420,7 +384,6 @@ class WeatherApp:
             t_unit = "°F"
         avg_temp_text = f"{avg_temp:.1f}{t_unit}"
 
-        # Detailed stats grid
         grid = tk.Frame(self.stats_frame_inner, bg="black")
         grid.pack(anchor="center", pady=(4, 0))
 
@@ -437,9 +400,6 @@ class WeatherApp:
             tk.Label(grid, text=k, font=NORMAL_FONT, fg="#ccc", bg="black", anchor="e", width=22).grid(row=i, column=0, sticky="e", pady=1, padx=(24, 8))
             tk.Label(grid, text=v, font=NORMAL_FONT, fg="#fff", bg="black", anchor="w", width=24).grid(row=i, column=1, sticky="w", pady=1)
 
-
-
-    ### -------- TAB SWITCH -------- ###
     def on_tab_change(self, event):
         idx = self.tabs.index(self.tabs.select())
         if idx == 0:
