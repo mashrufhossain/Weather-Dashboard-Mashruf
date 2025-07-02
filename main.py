@@ -385,7 +385,7 @@ class WeatherApp:
         avg_temp_text = f"{avg_temp:.1f}{t_unit}"
 
         grid = tk.Frame(self.stats_frame_inner, bg="black")
-        grid.pack(anchor="center", pady=(4, 0))
+        grid.pack(anchor="n", pady=(4, 0))
 
         rows = [
             ("Total logs:", stats['log_count']),
@@ -395,10 +395,18 @@ class WeatherApp:
             ("Average pressure:", f"{stats['avg_pressure']} hPa"),
             ("Average wind speed:", f"{stats['avg_wind']:.2f} m/s"),
         ]
+        rows.extend([
+            ("Average sea level pressure:", f"{stats['avg_sea_level']} hPa"),
+            ("Highest sea level:", f"{stats['highest_sea_value']} in {stats['highest_sea_city']} at {stats['highest_sea_time']}"),
+            ("Average ground level pressure:", f"{stats['avg_ground_level']} hPa"),
+            ("Lowest ground level:", f"{stats['lowest_ground_value']} in {stats['lowest_ground_city']} at {stats['lowest_ground_time']}"),
+            ("Earliest sunrise:", f"{stats['earliest_sunrise_time']} in {stats['earliest_sunrise_city']}"),
+            ("Latest sunset:", f"{stats['latest_sunset_time']} in {stats['latest_sunset_city']}"),
+        ])
 
         for i, (k, v) in enumerate(rows):
-            tk.Label(grid, text=k, font=NORMAL_FONT, fg="#ccc", bg="black", anchor="e", width=22).grid(row=i, column=0, sticky="e", pady=1, padx=(24, 8))
-            tk.Label(grid, text=v, font=NORMAL_FONT, fg="#fff", bg="black", anchor="w", width=24).grid(row=i, column=1, sticky="w", pady=1)
+            tk.Label(grid, text=k, font=NORMAL_FONT, fg="#ccc", bg="black", anchor="e").grid(row=i, column=0, sticky="e", pady=1, padx=(24, 8))
+            tk.Label(grid, text=v, font=NORMAL_FONT, fg="#fff", bg="black", anchor="w").grid(row=i, column=1, sticky="w", pady=1)
 
     def on_tab_change(self, event):
         idx = self.tabs.index(self.tabs.select())

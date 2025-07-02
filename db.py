@@ -126,17 +126,71 @@ class WeatherDB:
             strongest_wind_time = "N/A"
 
         # Averages and most searched
-        cur.execute("SELECT COUNT(*), AVG(temp), AVG(humidity), AVG(pressure), AVG(wind) FROM weather")
+        cur.execute("SELECT COUNT(*), AVG(temp), AVG(humidity), AVG(pressure) FROM weather")
         row = cur.fetchone()
         log_count = row[0] or 0
         avg_temp = row[1] or 0
         avg_humidity = int(row[2]) if row[2] else 0
         avg_pressure = int(row[3]) if row[3] else 0
-        avg_wind = row[4] or 0
+
+        cur.execute("SELECT AVG(wind_speed) FROM (SELECT CAST(SUBSTR(wind, 1, INSTR(wind, ' ') - 1) AS REAL) as wind_speed FROM weather WHERE wind LIKE '% m/s%')")
+        wind_row = cur.fetchone()
+        avg_wind = wind_row[0] if wind_row and wind_row[0] is not None else 0
 
         cur.execute("SELECT city, COUNT(*) FROM weather GROUP BY city ORDER BY COUNT(*) DESC LIMIT 1")
         city = cur.fetchone()
         most_searched = f"{city[0]} ({city[1]} times)" if city else "N/A"
+
+        # Sea level stats
+        cur.execute("SELECT AVG(sea_level) FROM weather WHERE sea_level IS NOT NULL")
+        row = cur.fetchone()
+        if row and row[0] is not None:
+            avg_sea_level = round(row[0], 2)
+        else:
+            avg_sea_level = "N/A"
+
+        cur.execute("SELECT sea_level, city, timestamp FROM weather WHERE sea_level IS NOT NULL ORDER BY sea_level DESC LIMIT 1")
+        highest_sea = cur.fetchone()
+        if highest_sea:
+            highest_sea_value = f"{highest_sea[0]:.2f} hPa"
+            highest_sea_city = highest_sea[1]
+            highest_sea_time = highest_sea[2]
+        else:
+            highest_sea_value = highest_sea_city = highest_sea_time = "N/A"
+
+        # Ground level stats
+        cur.execute("SELECT AVG(grnd_level) FROM weather WHERE grnd_level IS NOT NULL")
+        row = cur.fetchone()
+        if row and row[0] is not None:
+            avg_ground_level = round(row[0], 2)
+        else:
+            avg_ground_level = "N/A"
+
+        cur.execute("SELECT grnd_level, city, timestamp FROM weather WHERE grnd_level IS NOT NULL ORDER BY grnd_level ASC LIMIT 1")
+        lowest_ground = cur.fetchone()
+        if lowest_ground:
+            lowest_ground_value = f"{lowest_ground[0]:.2f} hPa"
+            lowest_ground_city = lowest_ground[1]
+            lowest_ground_time = lowest_ground[2]
+        else:
+            lowest_ground_value = lowest_ground_city = lowest_ground_time = "N/A"
+
+        # Sunrise/Sunset stats
+        cur.execute("SELECT sunrise, city FROM weather ORDER BY sunrise ASC LIMIT 1")
+        earliest_sunrise = cur.fetchone()
+        if earliest_sunrise:
+            earliest_sunrise_time = earliest_sunrise[0]
+            earliest_sunrise_city = earliest_sunrise[1]
+        else:
+            earliest_sunrise_time = earliest_sunrise_city = "N/A"
+
+        cur.execute("SELECT sunset, city FROM weather ORDER BY sunset DESC LIMIT 1")
+        latest_sunset = cur.fetchone()
+        if latest_sunset:
+            latest_sunset_time = latest_sunset[0]
+            latest_sunset_city = latest_sunset[1]
+        else:
+            latest_sunset_time = latest_sunset_city = "N/A"
 
         return {
             "hottest_raw": hottest_raw,
@@ -156,7 +210,17 @@ class WeatherDB:
             "avg_humidity": avg_humidity,
             "avg_pressure": avg_pressure,
             "avg_wind": avg_wind,
-            "most_searched": most_searched
+            "most_searched": most_searched,
+            "avg_sea_level": avg_sea_level,
+            "highest_sea_value": highest_sea_value,
+            "highest_sea_city": highest_sea_city,
+            "highest_sea_time": highest_sea_time,
+            "avg_ground_level": avg_ground_level,
+            "lowest_ground_value": lowest_ground_value,
+            "lowest_ground_city": lowest_ground_city,
+            "lowest_ground_time": lowest_ground_time,
+            "earliest_sunrise_time": earliest_sunrise_time,
+            "earliest_sunrise_city": earliest_sunrise_city,
+            "latest_sunset_time": latest_sunset_time,
+            "latest_sunset_city": latest_sunset_city,
         }
-
-
