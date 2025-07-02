@@ -193,7 +193,7 @@ class WeatherApp:
         # Responsive block layout
         for i, day in enumerate(days):
             dayblock = self._make_forecast_block(self.block_frame, day)
-            dayblock.grid(row=0, column=i, sticky="nsew", padx=28, ipadx=6, ipady=12)
+            dayblock.grid(row=0, column=i, sticky="nsew", padx=28, ipadx=14, ipady=20)
             self.block_frame.columnconfigure(i, weight=1)
             self.forecast_blocks.append(dayblock)
         self.root.update_idletasks()
@@ -215,14 +215,21 @@ class WeatherApp:
             icon = "🌫️"
         else:
             icon = "🌡️"
+
         temp_min = self.convert_temp(day['temp_min'])
         temp_max = self.convert_temp(day['temp_max'])
         t_unit = "°C" if self.temp_unit == "C" else "°F"
-        f = tk.Frame(parent, bg="#222", bd=2, relief="ridge", padx=10, pady=9)
-        tk.Label(f, text=day['date'], font=("Helvetica Neue", 12, "bold"), fg=color, bg="#222").pack(pady=(2, 0))
-        tk.Label(f, text=f"{icon} {title_case(day['weather'])}", font=("Helvetica Neue", 12), fg="#fff", bg="#222").pack()
-        tk.Label(f, text=f"{temp_min:.1f}{t_unit} - {temp_max:.1f}{t_unit}", font=("Helvetica Neue", 12, "bold"), fg="#ffe047", bg="#222").pack(pady=(6, 0))
-        tk.Label(f, text=f"Humidity: {day['humidity']}%", font=("Helvetica Neue", 11), fg="#bfffa5", bg="#222").pack()
+
+        f = tk.Frame(parent, bg="#222", bd=3, relief="ridge", padx=14, pady=12)
+
+        tk.Label(f, text=day['date'], font=("Helvetica Neue", 13, "bold"), fg=color, bg="#222").pack(pady=(2, 2))
+        tk.Label(f, text=f"{icon} {title_case(day['weather'])}", font=("Helvetica Neue", 13), fg="#fff", bg="#222").pack()
+        tk.Label(f, text=f"{temp_min:.1f}{t_unit} - {temp_max:.1f}{t_unit}", font=("Helvetica Neue", 13, "bold"), fg="#ffe047", bg="#222").pack(pady=(6, 2))
+        tk.Label(f, text=f"Humidity: {day['humidity']}%", font=("Helvetica Neue", 12), fg="#bfffa5", bg="#222").pack()
+
+        tk.Label(f, text=f"Wind: {day['wind']}", font=("Helvetica Neue", 12), fg="#43fad8", bg="#222").pack()
+        tk.Label(f, text=f"Visibility: {day['visibility']} km", font=("Helvetica Neue", 12), fg="#a1e3ff", bg="#222").pack()
+
         return f
 
     ### -------- HISTORY TAB -------- ###
