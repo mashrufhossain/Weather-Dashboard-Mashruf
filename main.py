@@ -86,6 +86,8 @@ class WeatherApp:
         self.stats_frame = tk.Frame(self.tabs, bg="black")
         self.tabs.add(self.stats_frame, text="History Statistics")
         self.tabs.pack(fill="both", expand=True, pady=(8, 0))
+        self.root.bind("<Tab>", self.next_tab)
+        self.root.bind("<Shift-Tab>", self.prev_tab)
 
     def create_forecast_tab(self):
         self.forecast_inner = tk.Frame(self.forecast_frame, bg="black")
@@ -426,6 +428,18 @@ class WeatherApp:
             self.refresh_history()
         elif idx == 2:
             self.refresh_stats()
+
+    def next_tab(self, event=None):
+        current = self.tabs.index(self.tabs.select())
+        next_index = (current + 1) % len(self.tabs.tabs())
+        self.tabs.select(next_index)
+        return "break"  # Prevent default focus change
+
+    def prev_tab(self, event=None):
+        current = self.tabs.index(self.tabs.select())
+        prev_index = (current - 1) % len(self.tabs.tabs())
+        self.tabs.select(prev_index)
+        return "break"  # Prevent default focus change
 
 if __name__ == "__main__":
     root = tk.Tk()
