@@ -24,16 +24,16 @@ class WeatherApp:
         self.root = root
         root.title("Weather Dashboard")
         root.configure(bg="black")
-        root.geometry("1100x800")
-        root.minsize(900, 600)
+        root.geometry("1600x1000")
+        root.minsize(1400, 800)
 
         self.db = WeatherDB(os.path.join("data", "weather.db"))
         self.temp_unit = "C"  # default: Celsius
 
         self.create_widgets()
-        self.create_forecast_tab()
         self.create_history_tab()
         self.create_stats_tab()
+        self.create_forecast_tab()
         self.tabs.bind("<<NotebookTabChanged>>", self.on_tab_change)
         self.refresh_forecast()
 
@@ -49,7 +49,6 @@ class WeatherApp:
         get_btn = tk.Button(input_frame, text="Get Weather", font=NORMAL_FONT, command=self.get_weather)
         get_btn.grid(row=0, column=2)
 
-        # Unit toggle
         self.unit_btn = tk.Button(
             input_frame, text="Show °F", font=NORMAL_FONT,
             fg="#222", bg="#ffe047", activeforeground="#fff", activebackground="#ffb200",
@@ -73,8 +72,19 @@ class WeatherApp:
         self.tabs.add(self.history_frame, text="History")
         self.stats_frame = tk.Frame(self.tabs, bg="black")
         self.tabs.add(self.stats_frame, text="History Statistics")
-
         self.tabs.pack(fill="both", expand=True, pady=(8, 0))
+
+
+    def create_forecast_tab(self):
+        self.forecast_inner = tk.Frame(self.forecast_frame, bg="black")
+        self.forecast_inner.pack(fill="both", expand=True, padx=0, pady=0)
+        self.forecast_blocks = []
+        self.forecast_header = tk.Label(self.forecast_inner, text="", font=NORMAL_FONT, fg="#ffe047", bg="black")
+        self.forecast_header.pack(pady=(18, 14))
+        self.block_frame = tk.Frame(self.forecast_inner, bg="black")
+        self.block_frame.pack(fill="x", expand=True)
+        self.forecast_footer = tk.Label(self.forecast_frame, text=FORECAST_FOOTER, font=SMALL_FONT, fg="#fff", bg="black")
+        self.forecast_footer.pack(side="bottom", pady=(0, 12))
 
     def toggle_unit(self):
         self.temp_unit = "F" if self.temp_unit == "C" else "C"
@@ -102,13 +112,20 @@ class WeatherApp:
             return
         # Save to DB
         self.db.insert_weather(
-            city=title_case(city),
-            temp=weather["temp"],
-            weather=title_case(weather["weather"]),
-            humidity=weather["humidity"],
-            pressure=weather["pressure"],
-            wind=weather["wind"]
-        )
+        city=title_case(city),
+        temp=weather["temp"],
+        feels_like=weather["feels_like"],
+        weather=title_case(weather["weather"]),
+        humidity=weather["humidity"],
+        pressure=weather["pressure"],
+        visibility=weather["visibility"],
+        wind=weather["wind"],
+        sea_level=weather["sea_level"],
+        grnd_level=weather["grnd_level"],
+        sunrise=weather["sunrise"],
+        sunset=weather["sunset"]
+    )
+        # Refresh all displays
         self.refresh_display(city, weather)
         self.refresh_history()
         self.refresh_stats()
@@ -118,32 +135,41 @@ class WeatherApp:
         if not weather:
             self.weather_display.config(text="")
             return
+
         temp = self.convert_temp(weather['temp'])
+        feels_like = self.convert_temp(weather["feels_like"])
         t_unit = "°C" if self.temp_unit == "C" else "°F"
+
+        visibility = weather.get("visibility", "N/A")
+        wind_gust = weather.get("wind_gust", "N/A")
+        sea_level = weather.get("sea_level", "N/A")
+        grnd_level = weather.get("grnd_level", "N/A")
+        sunrise = weather.get("sunrise", "N/A")
+        sunset = weather.get("sunset", "N/A")
+
+        # Convert visibility to km if numeric
+        if visibility != "N/A" and isinstance(visibility, (int, float)):
+            visibility_km = round(visibility / 1000, 1)
+        else:
+            visibility_km = "N/A"
+
         info = (
             f"{title_case(city)}\n"
             "-----------------------------\n"
-            f"Temp:   {temp:.2f}{t_unit}\n"
+            f"Temp: {temp:.2f}{t_unit}\n"
+            f"Feels like: {feels_like:.2f}{t_unit}\n"
             f"Weather: {title_case(weather['weather'])}\n"
             f"Humidity: {weather['humidity']}%\n"
             f"Pressure: {weather['pressure']} hPa\n"
-            f"Wind:   {weather['wind']}"
+            f"Visibility: {visibility_km} km\n"
+            f"Wind: {weather['wind']}\n"
+            f"Sea level: {sea_level} hPa\n"
+            f"Ground level: {grnd_level} hPa\n"
+            f"Sunrise: {sunrise}\n"
+            f"Sunset: {sunset}"
         )
-        self.weather_display.config(text=info)
 
-    ### -------- FORECAST TAB -------- ###
-    def create_forecast_tab(self):
-        self.forecast_inner = tk.Frame(self.forecast_frame, bg="black")
-        self.forecast_inner.pack(fill="both", expand=True, padx=0, pady=0)
-        self.forecast_blocks = []
-        self.forecast_header = tk.Label(self.forecast_inner, text="", font=NORMAL_FONT, fg="#ffe047", bg="black")
-        self.forecast_header.pack(pady=(18, 14))
-        # Horizontal container for forecast cards
-        self.block_frame = tk.Frame(self.forecast_inner, bg="black")
-        self.block_frame.pack(fill="x", expand=True)
-        # Footer (always visible)
-        self.forecast_footer = tk.Label(self.forecast_frame, text=FORECAST_FOOTER, font=SMALL_FONT, fg="#fff", bg="black")
-        self.forecast_footer.pack(side="bottom", pady=(0, 12))
+        self.weather_display.config(text=info)
 
     def refresh_forecast(self, city=None):
         # Clear previous blocks
@@ -217,7 +243,8 @@ class WeatherApp:
 
     def create_history_tab(self):
         # Treeview table (always aligned)
-        columns = ("timestamp", "city", "temp", "weather", "humidity", "pressure", "wind")
+        columns = ("timestamp", "city", "temp", "feels_like", "weather", "humidity", "pressure",
+           "visibility", "wind", "sea_level", "grnd_level", "sunrise", "sunset")
         self.tree = ttk.Treeview(self.history_frame, columns=columns, show="headings", height=18)
         self.tree.pack(fill="both", expand=True, padx=12, pady=(14, 0))
         
@@ -261,14 +288,37 @@ class WeatherApp:
             self.tree.delete(i)
         entries = self.db.get_all_history()
         if not entries:
-            self.tree.insert("", "end", values=["No history found."] + [""] * 6)
+            self.tree.insert("", "end", values=["No history found."] + [""] * 13)
             return
+
+        t_unit = "°C" if self.temp_unit == "C" else "°F"
+
         for entry in entries:
-            temp = self.convert_temp(entry[2])
-            t_unit = "°C" if self.temp_unit == "C" else "°F"
+            try:
+                temp = float(entry[2]) if entry[2] is not None else None
+                temp_str = f"{self.convert_temp(temp):.2f}{t_unit}" if temp is not None else "N/A"
+            except (ValueError, TypeError):
+                temp_str = "N/A"
+
+            try:
+                feels_like = float(entry[3]) if entry[3] is not None else None
+                feels_like_str = f"{self.convert_temp(feels_like):.2f}{t_unit}" if feels_like is not None else "N/A"
+            except (ValueError, TypeError):
+                feels_like_str = "N/A"
+
             row = (
-                entry[0], entry[1], f"{temp:.2f}{t_unit}", entry[3],
-                entry[4], entry[5], entry[6]
+                entry[0], entry[1],
+                temp_str,
+                feels_like_str,
+                entry[4] or "N/A",
+                entry[5] or "N/A",
+                entry[6] or "N/A",
+                entry[7] or "N/A",
+                entry[8] or "N/A",
+                entry[9] or "N/A",
+                entry[10] or "N/A",
+                entry[11] or "N/A",
+                entry[12] or "N/A"
             )
             self.tree.insert("", "end", values=row, tags=('centered',))
         self.root.update_idletasks()

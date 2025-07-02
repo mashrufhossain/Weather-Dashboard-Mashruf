@@ -12,32 +12,48 @@ class WeatherDB:
     def create_table(self):
         cur = self.conn.cursor()
         cur.execute("""
-        CREATE TABLE IF NOT EXISTS weather (
-            timestamp TEXT,
-            city TEXT,
-            temp REAL,
-            weather TEXT,
-            humidity INTEGER,
-            pressure INTEGER,
-            wind REAL
-        )
+            CREATE TABLE IF NOT EXISTS weather (
+                timestamp TEXT,
+                city TEXT,
+                temp REAL,
+                feels_like REAL,
+                weather TEXT,
+                humidity INTEGER,
+                pressure INTEGER,
+                visibility REAL,
+                wind TEXT,
+                sea_level REAL,
+                grnd_level REAL,
+                sunrise TEXT,
+                sunset TEXT
+            )
         """)
         self.conn.commit()
 
-    def insert_weather(self, city, temp, weather, humidity, pressure, wind):
+    def insert_weather(self, city, temp, feels_like, weather, humidity, pressure,
+                   visibility, wind, sea_level, grnd_level,
+                   sunrise, sunset):
         cur = self.conn.cursor()
         cur.execute("""
-        INSERT INTO weather (timestamp, city, temp, weather, humidity, pressure, wind)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO weather (timestamp, city, temp, feels_like, weather,
+            humidity, pressure, visibility, wind,
+            sea_level, grnd_level, sunrise, sunset)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            city, temp, weather, humidity, pressure, wind
+            city, temp, feels_like, weather,
+            humidity, pressure, visibility, wind,
+            sea_level, grnd_level, sunrise, sunset
         ))
         self.conn.commit()
 
     def get_all_history(self):
         cur = self.conn.cursor()
-        cur.execute("SELECT timestamp, city, temp, weather, humidity, pressure, wind FROM weather ORDER BY timestamp DESC LIMIT 50")
+        cur.execute("""
+            SELECT timestamp, city, temp, feels_like, weather, humidity, pressure,
+            visibility, wind, sea_level, grnd_level, sunrise, sunset
+            FROM weather ORDER BY timestamp DESC LIMIT 50
+        """)
         return cur.fetchall()
 
     def get_stats(self):

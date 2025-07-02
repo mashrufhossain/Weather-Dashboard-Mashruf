@@ -1,5 +1,6 @@
 import os
 import requests
+from datetime import datetime
 
 def get_api_key():
     # Assumes .env file contains: OPENWEATHER_API_KEY=xxxx
@@ -21,10 +22,17 @@ def fetch_weather(city):
     w = data["weather"][0]["description"]
     return {
         "temp": data["main"]["temp"],
-        "weather": w,
+        "feels_like": data["main"]["feels_like"],
         "humidity": data["main"]["humidity"],
         "pressure": data["main"]["pressure"],
-        "wind": f"{data['wind']['speed']:.2f} m/s, {data['wind'].get('deg', 0):.0f}°"
+        "visibility": data.get("visibility", "N/A"),
+        "wind": f"{data['wind']['speed']:.2f} m/s, {data['wind'].get('deg', 0):.0f}°",
+        "wind_gust": data["wind"].get("gust", "N/A"),
+        "sea_level": data["main"].get("sea_level", "N/A"),
+        "grnd_level": data["main"].get("grnd_level", "N/A"),
+        "sunrise": datetime.fromtimestamp(data["sys"]["sunrise"]).strftime('%H:%M'),
+        "sunset": datetime.fromtimestamp(data["sys"]["sunset"]).strftime('%H:%M'),
+        "weather": data["weather"][0]["description"]
     }
 
 def fetch_5day_forecast(city):
