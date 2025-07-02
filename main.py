@@ -221,14 +221,25 @@ class WeatherApp:
         temp_max = self.convert_temp(day['temp_max'])
         t_unit = "°C" if self.temp_unit == "C" else "°F"
 
-        f = tk.Frame(parent, bg="#222", bd=3, relief="ridge", padx=14, pady=80)
+        f = tk.Frame(parent, bg="#222", bd=3, relief="ridge", padx=14, pady=12)
 
-        tk.Label(f, text=day['date'], font=("Helvetica Neue", 18, "bold"), fg=color, bg="#222").pack(pady=(4, 2))
-        tk.Label(f, text=f"{icon} {title_case(day['weather'])}", font=("Helvetica Neue", 18), fg="#fff", bg="#222").pack()
-        tk.Label(f, text=f"{temp_min:.1f}{t_unit} - {temp_max:.1f}{t_unit}", font=("Helvetica Neue", 20, "bold"), fg="#ffe047", bg="#222").pack(pady=(8, 4))
-        tk.Label(f, text=f"Humidity: {day['humidity']}%", font=("Helvetica Neue", 16), fg="#bfffa5", bg="#222").pack()
+        # Date — make large
+        tk.Label(f, text=day['date'], font=("Helvetica Neue", 16, "bold"), fg=color, bg="#222").pack(pady=(2, 0))
+        
+        # Weather line
+        tk.Label(f, text=f"{icon} {title_case(day['weather'])}", font=("Helvetica Neue", 16), fg="#fff", bg="#222").pack()
+
+        # Divider space
+        tk.Label(f, text="----------------", font=("Helvetica Neue", 12), fg="#555", bg="#222").pack(pady=(4, 4))
+
+        # Temp range — same big size
+        tk.Label(f, text=f"{temp_min:.1f}{t_unit} - {temp_max:.1f}{t_unit}", font=("Helvetica Neue", 16, "bold"), fg="#ffe047", bg="#222").pack(pady=(0, 8))
+
+        # Bottom data points
+        tk.Label(f, text=f"Humidity: {day['humidity']}%", font=("Helvetica Neue", 15), fg="#bfffa5", bg="#222").pack()
         tk.Label(f, text=f"Wind: {day.get('wind', 'N/A')}", font=("Helvetica Neue", 15), fg="#43fad8", bg="#222").pack()
         tk.Label(f, text=f"Visibility: {day.get('visibility', 'N/A')} km", font=("Helvetica Neue", 15), fg="#a1e3ff", bg="#222").pack()
+
         return f
 
     ### -------- HISTORY TAB -------- ###
