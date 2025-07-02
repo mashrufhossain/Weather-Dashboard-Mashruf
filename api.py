@@ -2,15 +2,11 @@ import os
 import requests
 from datetime import datetime
 import collections
+from dotenv import load_dotenv
 
-def get_api_key():
-    # Assumes .env file contains: OPENWEATHER_API_KEY=xxxx
-    from dotenv import load_dotenv
-    load_dotenv()
-    return os.getenv("OPENWEATHER_API_KEY")
-
-API_KEY = get_api_key()
-BASE_URL = "http://api.openweathermap.org/data/2.5/forecast"
+# Load once at module level
+load_dotenv()
+API_KEY = os.getenv("OPENWEATHER_API_KEY")
 
 def fetch_weather(city):
     url = (
@@ -21,14 +17,15 @@ def fetch_weather(city):
     data = r.json()
     if r.status_code != 200:
         raise Exception(data.get("message", "API error"))
-    w = data["weather"][0]["description"]
+    wind_deg = data["wind"].get("deg")
+    wind_deg_str = f"{wind_deg:.0f}°" if wind_deg is not None else "N/A"
     return {
         "temp": data["main"]["temp"],
         "feels_like": data["main"]["feels_like"],
         "humidity": data["main"]["humidity"],
         "pressure": data["main"]["pressure"],
         "visibility": data.get("visibility", "N/A"),
-        "wind": f"{data['wind']['speed']:.2f} m/s, {data['wind'].get('deg', 0):.0f}°",
+        "wind": f"{data['wind']['speed']:.2f} m/s, {wind_deg_str}",
         "wind_gust": data["wind"].get("gust", "N/A"),
         "sea_level": data["main"].get("sea_level", "N/A"),
         "grnd_level": data["main"].get("grnd_level", "N/A"),
@@ -38,18 +35,13 @@ def fetch_weather(city):
     }
 
 def fetch_5day_forecast(city):
-    import requests
-    from datetime import datetime
-    import collections
-    api_key = os.getenv("OPENWEATHER_API_KEY")
-    url = f"https://api.openweathermap.org/data/2.5/forecast?q={city}&appid={api_key}&units=metric"
+    url = f"https://api.openweathermap.org/data/2.5/forecast?q={city}&appid={API_KEY}&units=metric"
     r = requests.get(url)
     data = r.json()
     if "list" not in data:
         raise Exception("Forecast data unavailable")
 
     daily_data = collections.defaultdict(list)
-
     for entry in data["list"]:
         date_str = entry["dt_txt"].split(" ")[0]
         daily_data[date_str].append(entry)
@@ -60,17 +52,15 @@ def fetch_5day_forecast(city):
         hums = [e["main"]["humidity"] for e in entries]
         weather_desc = entries[0]["weather"][0]["description"]
 
-        # Visibility: collect only if exists
         visibilities = [e["visibility"] for e in entries if "visibility" in e]
         if visibilities:
-            avg_visibility = round(sum(visibilities) / len(visibilities) / 1000, 1)  # to km
+            avg_visibility = round(sum(visibilities) / len(visibilities) / 1000, 1)
             visibility_str = f"{avg_visibility}"
         else:
             visibility_str = "N/A"
 
-        # Wind
         wind_speeds = [e["wind"]["speed"] for e in entries if "wind" in e]
-        wind_degs = [e["wind"].get("deg", 0) for e in entries if "wind" in e]
+        wind_degs = [e["wind"].get("deg") for e in entries if "wind" in e and e["wind"].get("deg") is not None]
         if wind_speeds and wind_degs:
             avg_speed = round(sum(wind_speeds) / len(wind_speeds), 2)
             avg_deg = round(sum(wind_degs) / len(wind_degs))
@@ -78,8 +68,11 @@ def fetch_5day_forecast(city):
         else:
             wind_str = "N/A"
 
+        # Format date for friendlier display
+        formatted_date = datetime.strptime(date, "%Y-%m-%d").strftime("%a, %b %d")
+
         day = {
-            "date": date,
+            "date": formatted_date,
             "temp_min": min(temps),
             "temp_max": max(temps),
             "humidity": round(sum(hums) / len(hums)),
@@ -90,4 +83,3 @@ def fetch_5day_forecast(city):
         forecast_days.append(day)
 
     return forecast_days
-

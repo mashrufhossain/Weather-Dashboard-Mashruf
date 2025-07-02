@@ -250,7 +250,7 @@ class WeatherApp:
         tk.Label(content, text=f"{temp_min:.1f}{t_unit} - {temp_max:.1f}{t_unit}", font=("Helvetica Neue", 16, "bold"), fg="#ffe047", bg="#222").pack(pady=(0, 8), anchor="center")
         tk.Label(content, text=f"Humidity: {day['humidity']}%", font=("Helvetica Neue", 15), fg="#bfffa5", bg="#222").pack(anchor="center")
         tk.Label(content, text=f"Wind: {day.get('wind', 'N/A')}", font=("Helvetica Neue", 15), fg="#43fad8", bg="#222").pack(anchor="center")
-        tk.Label(content, text=f"Visibility: {day.get('visibility', 'N/A')} km", font=("Helvetica Neue", 15), fg="#a1e3ff", bg="#222").pack(anchor="center")
+        tk.Label(content, text=f"Visibility: {day.get('visibility', 'N/A')} km (max 10 km)", font=("Helvetica Neue", 15), fg="#a1e3ff", bg="#222").pack(anchor="center")
 
         return f
 
@@ -291,8 +291,12 @@ class WeatherApp:
         self.tree.tag_configure('centered', anchor='center')
 
         for col in columns:
-            self.tree.heading(col, text=col.replace("_", " ").title(), command=lambda _col=col: self.treeview_sort_column(self.tree, _col, False))
-            self.tree.column(col, anchor="center", width=120)
+            display_text = col.replace("_", " ").title()
+            if col == "timestamp":
+                self.tree.column(col, anchor="center", width=200)
+            else:
+                self.tree.column(col, anchor="center", width=120)
+            self.tree.heading(col, text=display_text, command=lambda _col=col: self.treeview_sort_column(self.tree, _col, False))
 
         self.history_footer = tk.Label(self.history_frame, text=HISTORY_FOOTER, font=NORMAL_FONT, fg="#fff", bg="black")
         self.history_footer.pack(side="bottom", pady=(0, 12))
