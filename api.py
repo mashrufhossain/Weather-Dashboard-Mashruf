@@ -38,6 +38,9 @@ def fetch_weather(city):
     }
 
 def fetch_5day_forecast(city):
+    import requests
+    from datetime import datetime
+    import collections
     api_key = os.getenv("OPENWEATHER_API_KEY")
     url = f"https://api.openweathermap.org/data/2.5/forecast?q={city}&appid={api_key}&units=metric"
     r = requests.get(url)
@@ -57,9 +60,23 @@ def fetch_5day_forecast(city):
         hums = [e["main"]["humidity"] for e in entries]
         weather_desc = entries[0]["weather"][0]["description"]
 
-        # Optional approximate wind & visibility from first entry of day
-        wind = f"{entries[0]['wind']['speed']:.2f} m/s" if 'wind' in entries[0] else "N/A"
-        visibility = round(entries[0].get("visibility", 0) / 1000, 1) if 'visibility' in entries[0] else "N/A"
+        # Visibility: collect only if exists
+        visibilities = [e["visibility"] for e in entries if "visibility" in e]
+        if visibilities:
+            avg_visibility = round(sum(visibilities) / len(visibilities) / 1000, 1)  # to km
+            visibility_str = f"{avg_visibility}"
+        else:
+            visibility_str = "N/A"
+
+        # Wind
+        wind_speeds = [e["wind"]["speed"] for e in entries if "wind" in e]
+        wind_degs = [e["wind"].get("deg", 0) for e in entries if "wind" in e]
+        if wind_speeds and wind_degs:
+            avg_speed = round(sum(wind_speeds) / len(wind_speeds), 2)
+            avg_deg = round(sum(wind_degs) / len(wind_degs))
+            wind_str = f"{avg_speed} m/s, {avg_deg}°"
+        else:
+            wind_str = "N/A"
 
         day = {
             "date": date,
@@ -67,9 +84,10 @@ def fetch_5day_forecast(city):
             "temp_max": max(temps),
             "humidity": round(sum(hums) / len(hums)),
             "weather": weather_desc,
-            "wind": wind,
-            "visibility": visibility,
+            "wind": wind_str,
+            "visibility": visibility_str,
         }
         forecast_days.append(day)
 
     return forecast_days
+
