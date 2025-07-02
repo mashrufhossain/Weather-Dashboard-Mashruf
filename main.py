@@ -43,8 +43,13 @@ class WeatherApp:
         input_frame = tk.Frame(self.root, bg="black")
         input_frame.pack()
         tk.Label(input_frame, text="Enter city:", font=NORMAL_FONT, fg="#fff", bg="black").grid(row=0, column=0, padx=(0, 3))
+
         self.city_entry = tk.Entry(input_frame, font=NORMAL_FONT, width=20)
         self.city_entry.grid(row=0, column=1, padx=(0, 8))
+
+        # 🔥 Bind Enter key to get_weather
+        self.city_entry.bind("<Return>", lambda event: self.get_weather())
+
         get_btn = tk.Button(input_frame, text="Get Weather", font=NORMAL_FONT, command=self.get_weather)
         get_btn.grid(row=0, column=2)
 
@@ -52,7 +57,8 @@ class WeatherApp:
             input_frame, text="Show °F", font=NORMAL_FONT,
             fg="#222", bg="#ffe047", activeforeground="#fff", activebackground="#ffb200",
             bd=1, relief="solid", width=8,
-            command=self.toggle_unit)
+            command=self.toggle_unit
+        )
         self.unit_btn.grid(row=0, column=3, padx=(8, 0))
 
         self.weather_info_frame = tk.Frame(self.root, bg="black")
