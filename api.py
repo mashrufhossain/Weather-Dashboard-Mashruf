@@ -23,13 +23,17 @@ def search_city_options(query):
 
     options = []
     for loc in data:
-        name = loc.get("name", query)
-        state = loc.get("state")
-        country = loc.get("country", "")
+        name = loc.get("name", "")
+        state = loc.get("state", "")
+        if state:
+            state = state.title()  # Make state nicely formatted
+        country = loc.get("country", "").upper()  # Always uppercase for country code
+
         if state:
             full = f"{name}, {state}, {country}"
         else:
             full = f"{name}, {country}"
+
         options.append(full)
 
     return options
