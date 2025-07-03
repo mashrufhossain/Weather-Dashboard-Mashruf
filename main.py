@@ -19,7 +19,7 @@ STATS_FOOTER = "This tab summarizes weather history with key statistics and reco
 FORECAST_FOOTER = "This tab displays predictive forecasts for the city entered."
 
 def title_case(s):
-    return ' '.join([w.capitalize() for w in s.split()])
+    return ' '.join([w if w.isupper() else w.capitalize() for w in s.split()])
 
 class WeatherApp:
     def __init__(self, root):
