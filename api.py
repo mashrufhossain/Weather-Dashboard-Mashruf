@@ -8,6 +8,32 @@ from dotenv import load_dotenv
 load_dotenv()
 API_KEY = os.getenv("OPENWEATHER_API_KEY")
 
+def search_city_options(query):
+    """
+    Get city options from Geocoding API, return list of formatted strings.
+    """
+    url = "http://api.openweathermap.org/geo/1.0/direct"
+    params = {
+        "q": query,
+        "limit": 5,
+        "appid": API_KEY
+    }
+    r = requests.get(url, params=params)
+    data = r.json()
+
+    options = []
+    for loc in data:
+        name = loc.get("name", query)
+        state = loc.get("state")
+        country = loc.get("country", "")
+        if state:
+            full = f"{name}, {state}, {country}"
+        else:
+            full = f"{name}, {country}"
+        options.append(full)
+
+    return options
+
 def fetch_weather(city):
     url = (
         f"http://api.openweathermap.org/data/2.5/weather"

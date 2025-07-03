@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
-from api import fetch_weather, fetch_5day_forecast
+from api import fetch_weather, fetch_5day_forecast, search_city_options
+import threading
 from db import WeatherDB
 import os
 
@@ -35,6 +36,8 @@ class WeatherApp:
         self.create_stats_tab()
         self.create_forecast_tab()
         self.tabs.bind("<<NotebookTabChanged>>", self.on_tab_change)
+        self.suggestions_listbox = None
+        self.typing_timer = None
 
     def create_widgets(self):
         header = tk.Label(self.root, text="What's in Your Sky?", font=HEADER_FONT, fg="#DEAFEE", bg="black")
@@ -49,6 +52,7 @@ class WeatherApp:
 
         # 🔥 Bind Enter key to get_weather
         self.city_entry.bind("<Return>", lambda event: self.get_weather())
+        self.city_entry.bind("<KeyRelease>", self.on_typing)
 
         get_btn = tk.Button(input_frame, text="Get Weather", font=NORMAL_FONT, command=self.get_weather)
         get_btn.grid(row=0, column=2)
@@ -125,15 +129,16 @@ class WeatherApp:
         if not city:
             messagebox.showerror("Error", "Please enter a city name.")
             return
+
         try:
-            weather = fetch_weather(city)
+            weather = fetch_weather(city.split(",")[0])  # Only take city name
             self.last_weather = weather
         except Exception as e:
             messagebox.showerror("Error", f"Could not fetch weather: {e}")
             return
 
         self.db.insert_weather(
-            city=title_case(city),
+            city=city,
             temp=weather["temp"],
             feels_like=weather["feels_like"],
             weather=title_case(weather["weather"]),
@@ -151,6 +156,7 @@ class WeatherApp:
         self.refresh_history()
         self.refresh_stats()
         self.refresh_forecast(city)
+
 
     def refresh_display(self, city, weather):
         # Clear previous content
@@ -440,6 +446,78 @@ class WeatherApp:
         prev_index = (current - 1) % len(self.tabs.tabs())
         self.tabs.select(prev_index)
         return "break"  # Prevent default focus change
+    
+    def ask_user_to_choose_location(self, options):
+        """
+        Show a popup window to let the user choose a location option.
+        Returns the chosen string.
+        """
+        popup = tk.Toplevel(self.root)
+        popup.title("Select Location")
+        popup.configure(bg="black")
+        tk.Label(popup, text="Did you mean:", font=NORMAL_FONT, fg="#fff", bg="black").pack(pady=(10, 5))
+
+        choice_var = tk.StringVar(value=options[0])
+
+        for opt in options:
+            tk.Radiobutton(popup, text=opt, variable=choice_var, value=opt,
+                        font=SMALL_FONT, fg="#fff", bg="black",
+                        selectcolor="#444", activebackground="black").pack(anchor="w", padx=20)
+
+        def on_select():
+            popup.destroy()
+
+        tk.Button(popup, text="OK", font=NORMAL_FONT, command=on_select).pack(pady=(8, 10))
+        popup.grab_set()  # Make it modal
+        popup.wait_window()
+
+        return choice_var.get()
+    
+    def show_suggestions(self, suggestions):
+        if self.suggestions_listbox:
+            self.suggestions_listbox.destroy()
+
+        if not suggestions:
+            return
+
+        self.suggestions_listbox = tk.Listbox(self.root, font=SMALL_FONT, bg="#222", fg="#fff", selectbackground="#555", height=len(suggestions))
+        self.suggestions_listbox.place(x=self.city_entry.winfo_rootx() - self.root.winfo_rootx(),
+                                    y=self.city_entry.winfo_rooty() - self.root.winfo_rooty() + self.city_entry.winfo_height())
+
+        for s in suggestions:
+            self.suggestions_listbox.insert(tk.END, s)
+
+        self.suggestions_listbox.bind("<<ListboxSelect>>", self.on_suggestion_selected)
+
+    def on_suggestion_selected(self, event):
+        if not self.suggestions_listbox:
+            return
+        selection = self.suggestions_listbox.get(self.suggestions_listbox.curselection())
+        self.city_entry.delete(0, tk.END)
+        self.city_entry.insert(0, selection)
+        self.suggestions_listbox.destroy()
+        self.suggestions_listbox = None
+
+    def fetch_suggestions(self):
+        query = self.city_entry.get().strip()
+        if not query or len(query) < 2:
+            if self.suggestions_listbox:
+                self.suggestions_listbox.destroy()
+                self.suggestions_listbox = None
+            return
+
+        def worker():
+            options = search_city_options(query)
+            self.root.after(0, lambda: self.show_suggestions(options))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+
+    def on_typing(self, event):
+        if self.typing_timer:
+            self.root.after_cancel(self.typing_timer)
+        self.typing_timer = self.root.after(300, self.fetch_suggestions)  # 300 ms debounce
+
 
 if __name__ == "__main__":
     root = tk.Tk()
