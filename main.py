@@ -338,8 +338,11 @@ class WeatherApp:
             display_text = col.replace("_", " ").title()
             if col == "timestamp":
                 self.tree.column(col, anchor="center", width=200)
+            elif col == "city":
+                self.tree.column(col, anchor="center", width=250)  # wider for long city names
             else:
                 self.tree.column(col, anchor="center", width=120)
+
             self.tree.heading(col, text=display_text, command=lambda _col=col: self.treeview_sort_column(self.tree, _col, False))
 
         self.history_footer = tk.Label(self.history_frame, text=HISTORY_FOOTER, font=NORMAL_FONT, fg="#fff", bg="black")
