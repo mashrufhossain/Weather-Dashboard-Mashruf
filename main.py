@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
-from api import fetch_weather, fetch_5day_forecast, search_city_options
+from api import fetch_weather_by_coords, fetch_5day_forecast_by_coords, search_city_options
+
 import threading
 from db import WeatherDB
 import os
@@ -27,6 +28,7 @@ class WeatherApp:
         root.configure(bg="black")
         root.geometry("1900x1025")
         root.minsize(1400, 800)
+        self.suggestion_coords = {}
 
         self.db = WeatherDB(os.path.join("data", "weather.db"))
         self.temp_unit = "C"
@@ -38,7 +40,6 @@ class WeatherApp:
         self.tabs.bind("<<NotebookTabChanged>>", self.on_tab_change)
         self.suggestions_listbox = None
         self.typing_timer = None
-        self.is_navigating_suggestions = False
 
     def create_widgets(self):
         header = tk.Label(self.root, text="What's in Your Sky?", font=HEADER_FONT, fg="#DEAFEE", bg="black")
@@ -54,9 +55,6 @@ class WeatherApp:
         # 🔥 Bind Enter key to get_weather
         self.city_entry.bind("<Return>", lambda event: self.get_weather())
         self.city_entry.bind("<KeyRelease>", self.on_typing)
-        self.city_entry.bind("<Down>", self.on_listbox_down)
-        self.city_entry.bind("<Up>", self.on_listbox_up)
-
 
         get_btn = tk.Button(input_frame, text="Get Weather", font=NORMAL_FONT, command=self.get_weather)
         get_btn.grid(row=0, column=2)
@@ -129,38 +127,31 @@ class WeatherApp:
         return temp_c if self.temp_unit == "C" else temp_c * 9/5 + 32
 
     def get_weather(self):
-        if self.suggestions_listbox and self.suggestions_listbox.size() > 0:
-            if self.suggestions_listbox.curselection():
-                selected = self.suggestions_listbox.get(self.suggestions_listbox.curselection())
-            else:
-                selected = self.suggestions_listbox.get(0)
-            self.city_entry.delete(0, tk.END)
-            self.city_entry.insert(0, selected)
-            self.suggestions_listbox.destroy()
-            self.suggestions_listbox = None
-            self.is_navigating_suggestions = False  # ✅ Add this line
-            self.city_entry.focus_set()
-
-        # Extra safety: if listbox is still around, destroy it
+        # Always destroy suggestions listbox if it exists
         if self.suggestions_listbox:
             self.suggestions_listbox.destroy()
             self.suggestions_listbox = None
-            self.is_navigating_suggestions = False  # ✅ Make sure flag is reset
 
-        city = self.city_entry.get().strip()
-        if not city:
+        city_disp = self.city_entry.get().strip()
+        if not city_disp:
             messagebox.showerror("Error", "Please enter a city name.")
             return
 
+        if city_disp not in self.suggestion_coords:
+            messagebox.showerror("Error", "Please select a valid city from suggestions.")
+            return
+
+        lat, lon = self.suggestion_coords[city_disp]
+
         try:
-            weather = fetch_weather(city.split(",")[0])  # Only take city part
+            weather = fetch_weather_by_coords(lat, lon)
             self.last_weather = weather
         except Exception as e:
             messagebox.showerror("Error", f"Could not fetch weather: {e}")
             return
 
         self.db.insert_weather(
-            city=city,
+            city=city_disp,
             temp=weather["temp"],
             feels_like=weather["feels_like"],
             weather=title_case(weather["weather"]),
@@ -174,32 +165,10 @@ class WeatherApp:
             sunset=weather["sunset"]
         )
 
-        self.refresh_display(city, weather)
+        self.refresh_display(city_disp, weather)
         self.refresh_history()
         self.refresh_stats()
-        self.refresh_forecast(city)
-
-
-        self.db.insert_weather(
-            city=city,
-            temp=weather["temp"],
-            feels_like=weather["feels_like"],
-            weather=title_case(weather["weather"]),
-            humidity=weather["humidity"],
-            pressure=weather["pressure"],
-            visibility=weather["visibility"],
-            wind=weather["wind"],
-            sea_level=weather["sea_level"],
-            grnd_level=weather["grnd_level"],
-            sunrise=weather["sunrise"],
-            sunset=weather["sunset"]
-        )
-
-        self.refresh_display(city, weather)
-        self.refresh_history()
-        self.refresh_stats()
-        self.refresh_forecast(city)
-
+        self.refresh_forecast(city_disp)
 
     def refresh_display(self, city, weather):
         # Clear previous content
@@ -258,11 +227,20 @@ class WeatherApp:
             self.forecast_header.config(text="Enter a city to view forecast.")
             self.root.update_idletasks()
             return
+        city_disp = city or self.city_entry.get().strip()
+        if not city_disp or city_disp not in self.suggestion_coords:
+            self.forecast_header.config(text="Enter a city to view forecast.")
+            self.root.update_idletasks()
+            return
+
+        lat, lon = self.suggestion_coords[city_disp]
+
         try:
-            days = fetch_5day_forecast(city)
+            days = fetch_5day_forecast_by_coords(lat, lon)
         except Exception as e:
             self.forecast_header.config(text=f"Could not fetch forecast: {e}")
             return
+
         self.forecast_header.config(
             text=f"5-Day Forecast for {title_case(city)}:",
             anchor="center", justify="center", font=("Helvetica Neue", 34, "bold")
@@ -523,33 +501,32 @@ class WeatherApp:
         if not suggestions:
             return
 
+        self.suggestion_coords = {s: (opt["lat"], opt["lon"]) for opt, s in zip(suggestions, [opt["display"] for opt in suggestions])}
+
         self.suggestions_listbox = tk.Listbox(
             self.root,
-            font=("Helvetica Neue", 14),           # Modern, clean font
-            bg="#111",                             # Dark background
-            fg="#fff",                             # White text
+            font=("Helvetica Neue", 14),
+            bg="#111",
+            fg="#fff",
             highlightthickness=2,
-            highlightbackground="#DEAFEE",        # Purple border highlight
-            selectbackground="#DEAFEE",           # Purple selection background
-            selectforeground="#111",              # Dark text when selected
+            highlightbackground="#DEAFEE",
+            selectbackground="#DEAFEE",
+            selectforeground="#111",
             relief="solid",
             bd=1,
-            height=min(len(suggestions), 6),      # Limit height so it doesn't get too long
+            height=min(len(suggestions), 6),
             activestyle="none"
         )
 
-        # Position the listbox right below the entry
         x = self.city_entry.winfo_rootx() - self.root.winfo_rootx()
         y = self.city_entry.winfo_rooty() - self.root.winfo_rooty() + self.city_entry.winfo_height()
         self.suggestions_listbox.place(x=x, y=y, width=self.city_entry.winfo_width())
 
-        for s in suggestions:
-            self.suggestions_listbox.insert(tk.END, s)
+        for opt in suggestions:
+            self.suggestions_listbox.insert(tk.END, opt["display"])
 
         self.suggestions_listbox.bind("<<ListboxSelect>>", self.on_suggestion_selected)
-        self.suggestions_listbox.bind("<Return>", self.on_suggestion_enter)
-        self.suggestions_listbox.bind("<Down>", self.on_listbox_down)
-        self.suggestions_listbox.bind("<Up>", self.on_listbox_up)
+
 
     def on_suggestion_selected(self, event):
         if not self.suggestions_listbox:
@@ -572,14 +549,11 @@ class WeatherApp:
         def worker():
             options = search_city_options(query)
             self.root.after(0, lambda: self.show_suggestions(options))
-
+            
         threading.Thread(target=worker, daemon=True).start()
 
 
     def on_typing(self, event):
-        if self.is_navigating_suggestions:
-            return  # skip refresh while using arrows
-
         if self.typing_timer:
             self.root.after_cancel(self.typing_timer)
         self.typing_timer = self.root.after(300, self.fetch_suggestions)
@@ -590,54 +564,6 @@ class WeatherApp:
             self.suggestions_listbox.selection_clear(0, tk.END)
             self.suggestions_listbox.selection_set(0)
             return "break"  # Stop Entry from moving cursor
-
-    def on_suggestion_enter(self, event):
-        try:
-            selection = self.suggestions_listbox.get(self.suggestions_listbox.curselection())
-            self.city_entry.delete(0, tk.END)
-            self.city_entry.insert(0, selection)
-            self.suggestions_listbox.destroy()
-            self.suggestions_listbox = None
-            self.city_entry.focus_set()
-            self.is_navigating_suggestions = False
-        except:
-            pass
-
-    def on_listbox_down(self, event):
-        if not self.suggestions_listbox:
-            return
-
-        self.is_navigating_suggestions = True
-
-        cur = self.suggestions_listbox.curselection()
-        if cur:
-            next_idx = min(cur[0] + 1, self.suggestions_listbox.size() - 1)
-        else:
-            next_idx = 0
-
-        self.suggestions_listbox.selection_clear(0, tk.END)
-        self.suggestions_listbox.selection_set(next_idx)
-        self.suggestions_listbox.activate(next_idx)
-
-        return "break"
-
-    def on_listbox_up(self, event):
-        if not self.suggestions_listbox:
-            return
-
-        self.is_navigating_suggestions = True
-
-        cur = self.suggestions_listbox.curselection()
-        if cur:
-            prev_idx = max(cur[0] - 1, 0)
-        else:
-            prev_idx = 0
-
-        self.suggestions_listbox.selection_clear(0, tk.END)
-        self.suggestions_listbox.selection_set(prev_idx)
-        self.suggestions_listbox.activate(prev_idx)
-
-        return "break"
 
 if __name__ == "__main__":
     root = tk.Tk()

@@ -10,7 +10,8 @@ API_KEY = os.getenv("OPENWEATHER_API_KEY")
 
 def search_city_options(query):
     """
-    Get city options from Geocoding API, return list of formatted strings.
+    Get city options from Geocoding API, return list of dicts:
+    { 'display': formatted string, 'lat': ..., 'lon': ... }
     """
     url = "http://api.openweathermap.org/geo/1.0/direct"
     params = {
@@ -26,23 +27,23 @@ def search_city_options(query):
         name = loc.get("name", "")
         state = loc.get("state", "")
         if state:
-            state = state.title()  # Make state nicely formatted
-        country = loc.get("country", "").upper()  # Always uppercase for country code
+            state = state.title()
+        country = loc.get("country", "").upper()
 
         if state:
-            full = f"{name}, {state}, {country}"
+            display = f"{name}, {state}, {country}"
         else:
-            full = f"{name}, {country}"
+            display = f"{name}, {country}"
 
-        options.append(full)
-
+        options.append({
+            "display": display,
+            "lat": loc["lat"],
+            "lon": loc["lon"]
+        })
     return options
 
-def fetch_weather(city):
-    url = (
-        f"http://api.openweathermap.org/data/2.5/weather"
-        f"?q={city}&appid={API_KEY}&units=metric"
-    )
+def fetch_weather_by_coords(lat, lon):
+    url = f"http://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={API_KEY}&units=metric"
     r = requests.get(url)
     data = r.json()
     if r.status_code != 200:
@@ -64,12 +65,13 @@ def fetch_weather(city):
         "weather": data["weather"][0]["description"]
     }
 
-def fetch_5day_forecast(city):
-    url = f"https://api.openweathermap.org/data/2.5/forecast?q={city}&appid={API_KEY}&units=metric"
+def fetch_5day_forecast_by_coords(lat, lon):
+    url = f"https://api.openweathermap.org/data/2.5/forecast?lat={lat}&lon={lon}&appid={API_KEY}&units=metric"
     r = requests.get(url)
     data = r.json()
     if "list" not in data:
         raise Exception("Forecast data unavailable")
+    # your existing parsing logic for forecast stays the same (copy it from your current fetch_5day_forecast)
 
     daily_data = collections.defaultdict(list)
     for entry in data["list"]:
@@ -98,7 +100,6 @@ def fetch_5day_forecast(city):
         else:
             wind_str = "N/A"
 
-        # Format date for friendlier display
         formatted_date = datetime.strptime(date, "%Y-%m-%d").strftime("%a, %b %d")
 
         day = {
