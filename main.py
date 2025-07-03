@@ -423,9 +423,9 @@ class WeatherApp:
         ]
 
         for i, (label, value, city, time) in enumerate(summary_rows):
-            tk.Label(summary_grid, text=label, font=NORMAL_FONT, fg="#fff", bg="black", anchor="w", width=16).grid(row=i, column=0, sticky="w", padx=(12, 8), pady=2)
-            tk.Label(summary_grid, text=value, font=NORMAL_FONT, fg="#ffe047", bg="black", anchor="w", width=10).grid(row=i, column=1, sticky="w", padx=8, pady=2)
-            tk.Label(summary_grid, text=city, font=NORMAL_FONT, fg="#43fad8", bg="black", anchor="w", width=18).grid(row=i, column=2, sticky="w", padx=8, pady=2)
+            tk.Label(summary_grid, text=label, font=NORMAL_FONT, fg="#fff", bg="black", anchor="w", width=18).grid(row=i, column=0, sticky="w", padx=(12, 8), pady=2)
+            tk.Label(summary_grid, text=value, font=NORMAL_FONT, fg="#ffe047", bg="black", anchor="w", width=12).grid(row=i, column=1, sticky="w", padx=8, pady=2)
+            tk.Label(summary_grid, text=city, font=NORMAL_FONT, fg="#43fad8", bg="black", anchor="w", width=22).grid(row=i, column=2, sticky="w", padx=8, pady=2)
             tk.Label(summary_grid, text=time, font=NORMAL_FONT, fg="#ccc", bg="black", anchor="w", width=20).grid(row=i, column=3, sticky="w", padx=8, pady=2)
 
         avg_temp = stats['avg_temp']
