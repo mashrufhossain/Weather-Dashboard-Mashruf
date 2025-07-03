@@ -47,14 +47,23 @@ class WeatherApp:
 
         input_frame = tk.Frame(self.root, bg="black")
         input_frame.pack()
+        self.helper_label = tk.Label(
+            self.root,
+            text="(Please select from suggestions)",
+            font=SMALL_FONT,
+            fg="#ccc",
+            bg="black"
+        )
+        self.helper_label.pack(pady=(2, 0))
+
         tk.Label(input_frame, text="Enter city:", font=NORMAL_FONT, fg="#fff", bg="black").grid(row=0, column=0, padx=(0, 3))
 
         self.city_entry = tk.Entry(input_frame, font=NORMAL_FONT, width=20)
         self.city_entry.grid(row=0, column=1, padx=(0, 8))
 
         # 🔥 Bind Enter key to get_weather
-        self.city_entry.bind("<Return>", lambda event: self.get_weather())
         self.city_entry.bind("<KeyRelease>", self.on_typing)
+        self.city_entry.bind("<Return>", self.on_enter_key)
 
         get_btn = tk.Button(input_frame, text="Get Weather", font=NORMAL_FONT, command=self.get_weather)
         get_btn.grid(row=0, column=2)
@@ -554,6 +563,11 @@ class WeatherApp:
 
 
     def on_typing(self, event):
+        if event.keysym in ["Up", "Down", "Left", "Right", "Return", "Tab", 
+                            "Shift_L", "Shift_R", "Control_L", "Control_R", 
+                            "Alt_L", "Alt_R", "Escape"]:
+            return
+
         if self.typing_timer:
             self.root.after_cancel(self.typing_timer)
         self.typing_timer = self.root.after(300, self.fetch_suggestions)
@@ -564,6 +578,18 @@ class WeatherApp:
             self.suggestions_listbox.selection_clear(0, tk.END)
             self.suggestions_listbox.selection_set(0)
             return "break"  # Stop Entry from moving cursor
+        
+    def on_enter_key(self, event):
+        city_disp = self.city_entry.get().strip()
+        # Check if it matches one of the valid suggestions
+        if city_disp in self.suggestion_coords:
+            self.get_weather()
+            # Also destroy the suggestion box if still visible
+            if self.suggestions_listbox:
+                self.suggestions_listbox.destroy()
+                self.suggestions_listbox = None
+        else:
+            messagebox.showwarning("Selection required", "Please select a city from the suggestions before pressing Enter.")
 
 if __name__ == "__main__":
     root = tk.Tk()
