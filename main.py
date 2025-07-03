@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 from api import fetch_weather_by_coords, fetch_5day_forecast_by_coords, search_city_options
-
+import time
 import threading
 from db import WeatherDB
 import os
@@ -29,10 +29,8 @@ class WeatherApp:
         root.geometry("1900x1025")
         root.minsize(1400, 800)
         self.suggestion_coords = {}
-
         self.db = WeatherDB(os.path.join("data", "weather.db"))
         self.temp_unit = "C"
-
         self.create_widgets()
         self.create_history_tab()
         self.create_stats_tab()
@@ -40,6 +38,8 @@ class WeatherApp:
         self.tabs.bind("<<NotebookTabChanged>>", self.on_tab_change)
         self.suggestions_listbox = None
         self.typing_timer = None
+        self.start_auto_refresh()
+
 
     def create_widgets(self):
         header = tk.Label(self.root, text="What's in Your Sky?", font=HEADER_FONT, fg="#DEAFEE", bg="black")
@@ -55,6 +55,9 @@ class WeatherApp:
             bg="black"
         )
         self.helper_label.pack(pady=(2, 0))
+        self.refresh_label = tk.Label(self.root, text="Last refreshed: never | Next refresh in: -- s", 
+                              font=SMALL_FONT, fg="#ccc", bg="black")
+        self.refresh_label.pack(pady=(2, 8))
 
         tk.Label(input_frame, text="Enter city:", font=NORMAL_FONT, fg="#fff", bg="black").grid(row=0, column=0, padx=(0, 3))
 
@@ -593,6 +596,35 @@ class WeatherApp:
                 self.suggestions_listbox = None
         else:
             messagebox.showwarning("Selection required", "Please select a city from the suggestions before pressing Enter.")
+
+
+    def start_auto_refresh(self):
+        self.next_refresh_seconds = 60  # how many seconds until next refresh
+
+        def update_timer():
+            if self.next_refresh_seconds > 0:
+                self.next_refresh_seconds -= 1
+            if hasattr(self, 'refresh_label'):
+                self.refresh_label.config(
+                    text=f"Last refreshed: {getattr(self, 'last_refresh_time', 'never')} | Next refresh in: {self.next_refresh_seconds} s"
+                )
+            self.root.after(1000, update_timer)  # call every second
+
+        def refresh():
+            city_disp = self.city_entry.get().strip()
+            if city_disp and city_disp in self.suggestion_coords:
+                self.get_weather()
+                self.last_refresh_time = time.strftime("%H:%M:%S")
+                self.next_refresh_seconds = 60  # reset countdown
+                if hasattr(self, 'refresh_label'):
+                    self.refresh_label.config(
+                        text=f"Last refreshed: {self.last_refresh_time} | Next refresh in: {self.next_refresh_seconds} s"
+                    )
+            self.root.after(60000, refresh)  # every 1 minute
+
+        self.root.after(1000, update_timer)  # start countdown
+        self.root.after(60000, refresh)      # start refresh
+
 
 if __name__ == "__main__":
     root = tk.Tk()
