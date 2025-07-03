@@ -38,6 +38,15 @@ class WeatherApp:
         self.tabs.bind("<<NotebookTabChanged>>", self.on_tab_change)
         self.suggestions_listbox = None
         self.typing_timer = None
+
+        # ✅ Add this BEFORE starting auto refresh
+        refresh_path = os.path.join("data", "last_refresh.txt")
+        if os.path.exists(refresh_path):
+            with open(refresh_path, "r") as f:
+                self.last_refresh_time = f.read().strip()
+        else:
+            self.last_refresh_time = "never"
+
         self.start_auto_refresh()
 
 
@@ -181,6 +190,19 @@ class WeatherApp:
         self.refresh_history()
         self.refresh_stats()
         self.refresh_forecast(city_disp)
+
+        # ✅ Update refresh time and file
+        self.last_refresh_time = time.strftime("%Y-%m-%d %H:%M:%S")
+        self.next_refresh_seconds = 60  # reset countdown
+
+        with open(os.path.join("data", "last_refresh.txt"), "w") as f:
+            f.write(self.last_refresh_time)
+
+        if hasattr(self, 'refresh_label'):
+            self.refresh_label.config(
+                text=f"Last refreshed: {self.last_refresh_time}  •••  Next refresh in: {self.next_refresh_seconds} s"
+            )
+
 
     def refresh_display(self, city, weather):
         # Clear previous content
@@ -599,31 +621,51 @@ class WeatherApp:
 
 
     def start_auto_refresh(self):
-        self.next_refresh_seconds = 60  # how many seconds until next refresh
+        self.next_refresh_seconds = 60
+
+        # Load from file if exists (do this at startup)
+        refresh_path = os.path.join("data", "last_refresh.txt")
+        if os.path.exists(refresh_path):
+            with open(refresh_path, "r") as f:
+                self.last_refresh_time = f.read().strip()
+        else:
+            self.last_refresh_time = "never"
 
         def update_timer():
             if self.next_refresh_seconds > 0:
                 self.next_refresh_seconds -= 1
+
             if hasattr(self, 'refresh_label'):
                 self.refresh_label.config(
-                    text=f"Last refreshed: {getattr(self, 'last_refresh_time', 'never')} | Next refresh in: {self.next_refresh_seconds} s"
+                    text=f"Last refreshed: {self.last_refresh_time}  •••  Next refresh in: {self.next_refresh_seconds} s"
                 )
-            self.root.after(1000, update_timer)  # call every second
+
+            self.root.after(1000, update_timer)
 
         def refresh():
             city_disp = self.city_entry.get().strip()
             if city_disp and city_disp in self.suggestion_coords:
                 self.get_weather()
-                self.last_refresh_time = time.strftime("%H:%M:%S")
-                self.next_refresh_seconds = 60  # reset countdown
+            else:
+                # Even if no city selected, update time to show that background ran
+                self.last_refresh_time = time.strftime("%Y-%m-%d %H:%M:%S")
+                self.next_refresh_seconds = 60
+
+                with open(os.path.join("data", "last_refresh.txt"), "w") as f:
+                    f.write(self.last_refresh_time)
+
                 if hasattr(self, 'refresh_label'):
                     self.refresh_label.config(
-                        text=f"Last refreshed: {self.last_refresh_time} | Next refresh in: {self.next_refresh_seconds} s"
+                        text=f"Last refreshed: {self.last_refresh_time}  •••  Next refresh in: {self.next_refresh_seconds} s"
                     )
-            self.root.after(60000, refresh)  # every 1 minute
 
-        self.root.after(1000, update_timer)  # start countdown
-        self.root.after(60000, refresh)      # start refresh
+            # Reset countdown
+            self.next_refresh_seconds = 60
+            self.root.after(60000, refresh)
+
+        # Start both loops
+        self.root.after(1000, update_timer)
+        self.root.after(60000, refresh)
 
 
 if __name__ == "__main__":
