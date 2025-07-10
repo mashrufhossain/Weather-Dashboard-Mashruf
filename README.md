@@ -79,7 +79,7 @@ pip install -r requirements.txt
 
 4. Add your OpenWeatherMap API key to a .env file:
 '''
-API_KEY=your_api_key_here
+OPENWEATHER_API_KEY=your_api_key_here
 '''
 
 5. Run the app:
