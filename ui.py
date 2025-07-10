@@ -1,0 +1,679 @@
+import tkinter as tk
+from tkinter import ttk, messagebox
+import os
+import time
+import threading
+from db import WeatherDB
+from utils import title_case
+from styles import HEADER_FONT, NORMAL_FONT, SMALL_FONT, TAB_BG, TAB_FG, ACTIVE_TAB_BG, ACTIVE_TAB_FG
+from constants import HISTORY_FOOTER, STATS_FOOTER, FORECAST_FOOTER
+from api import fetch_weather_by_coords, fetch_5day_forecast_by_coords, search_city_options
+
+
+class WeatherApp:
+    def __init__(self, root):
+        self.root = root
+        root.title("Weather Dashboard")
+        root.configure(bg="black")
+        root.geometry("1900x1025")
+        root.minsize(1400, 800)
+        self.suggestion_coords = {}
+        self.db = WeatherDB(os.path.join("data", "weather.db"))
+        self.temp_unit = "C"
+        self.create_widgets()
+        self.create_history_tab()
+        self.create_stats_tab()
+        self.create_forecast_tab()
+        self.tabs.bind("<<NotebookTabChanged>>", self.on_tab_change)
+        self.suggestions_listbox = None
+        self.typing_timer = None
+
+        # ✅ Add this BEFORE starting auto refresh
+        refresh_path = os.path.join("data", "last_refresh.txt")
+        if os.path.exists(refresh_path):
+            with open(refresh_path, "r") as f:
+                self.last_refresh_time = f.read().strip()
+        else:
+            self.last_refresh_time = "never"
+
+        self.start_auto_refresh()
+
+
+    def create_widgets(self):
+        header = tk.Label(self.root, text="What's in Your Sky?", font=HEADER_FONT, fg="#DEAFEE", bg="black")
+        header.pack(pady=(24, 20))
+
+        input_frame = tk.Frame(self.root, bg="black")
+        input_frame.pack()
+        self.helper_label = tk.Label(
+            self.root,
+            text="(Please select from suggestions)",
+            font=SMALL_FONT,
+            fg="#ccc",
+            bg="black"
+        )
+        self.helper_label.pack(pady=(2, 0))
+        self.refresh_label = tk.Label(self.root, text="Last refreshed: never | Next refresh in: -- s", 
+                              font=SMALL_FONT, fg="#ccc", bg="black")
+        self.refresh_label.pack(pady=(2, 8))
+
+        tk.Label(input_frame, text="Enter city:", font=NORMAL_FONT, fg="#fff", bg="black").grid(row=0, column=0, padx=(0, 3))
+
+        self.city_entry = tk.Entry(input_frame, font=NORMAL_FONT, width=20)
+        self.city_entry.grid(row=0, column=1, padx=(0, 8))
+
+        # 🔥 Bind Enter key to get_weather
+        self.city_entry.bind("<KeyRelease>", self.on_typing)
+        self.city_entry.bind("<Return>", self.on_enter_key)
+
+        get_btn = tk.Button(input_frame, text="Get Weather", font=NORMAL_FONT, command=self.get_weather)
+        get_btn.grid(row=0, column=2)
+
+        self.unit_btn = tk.Button(
+            input_frame, text="Show °F", font=NORMAL_FONT,
+            fg="#222", bg="#ffe047", activeforeground="#fff", activebackground="#ffb200",
+            bd=1, relief="solid", width=8,
+            command=self.toggle_unit
+        )
+        self.unit_btn.grid(row=0, column=3, padx=(8, 0))
+
+        self.weather_info_frame = tk.Frame(self.root, bg="black")
+        self.weather_info_frame.pack(pady=(16, 2))
+
+        self.tabs = ttk.Notebook(self.root)
+        style = ttk.Style()
+        style.theme_use('default')
+        style.configure('TNotebook.Tab', background=TAB_BG, foreground=TAB_FG, font=NORMAL_FONT, padding=[8, 4])
+        style.map('TNotebook.Tab', background=[('selected', ACTIVE_TAB_BG)], foreground=[('selected', ACTIVE_TAB_FG)])
+        self.tabs = ttk.Notebook(self.root)
+        style = ttk.Style()
+        style.theme_use('default')
+        style.configure('TNotebook.Tab', background=TAB_BG, foreground=TAB_FG, font=NORMAL_FONT, padding=[8, 4])
+        style.map('TNotebook.Tab', background=[('selected', ACTIVE_TAB_BG)], foreground=[('selected', ACTIVE_TAB_FG)])
+
+        # Remove focus highlight from tabs
+        style.layout("TNotebook.Tab", [
+            ('Notebook.tab', {'sticky': 'nswe', 'children': [
+                ('Notebook.padding', {'side': 'top', 'sticky': 'nswe', 'children': [
+                    ('Notebook.label', {'side': 'top', 'sticky': ''})
+                ]})
+            ]})
+        ])
+
+        self.forecast_frame = tk.Frame(self.tabs, bg="black")
+        self.tabs.add(self.forecast_frame, text="Forecast")
+        self.history_frame = tk.Frame(self.tabs, bg="black")
+        self.tabs.add(self.history_frame, text="History")
+        self.stats_frame = tk.Frame(self.tabs, bg="black")
+        self.tabs.add(self.stats_frame, text="History Statistics")
+        self.tabs.pack(fill="both", expand=True, pady=(8, 0))
+        self.root.bind("<Tab>", self.next_tab)
+        self.root.bind("<Shift-Tab>", self.prev_tab)
+
+
+    def create_forecast_tab(self):
+        self.forecast_inner = tk.Frame(self.forecast_frame, bg="black")
+        self.forecast_inner.pack(fill="both", expand=True, padx=0, pady=0)
+        self.forecast_blocks = []
+        self.forecast_header = tk.Label(
+            self.forecast_inner,
+            text="",
+            font=("Helvetica Neue", 34, "bold"),
+            fg="#ffe047",
+            bg="black",
+            anchor="center",
+            justify="center"
+        )
+        self.forecast_header.pack(pady=(20, 18))
+        self.block_frame = tk.Frame(self.forecast_inner, bg="black")
+        self.block_frame.pack(fill="x", expand=True)
+        self.forecast_footer = tk.Label(self.forecast_frame, text=FORECAST_FOOTER, font=SMALL_FONT, fg="#fff", bg="black")
+        self.forecast_footer.pack(side="bottom", pady=(0, 12))
+
+
+    def toggle_unit(self):
+        self.temp_unit = "F" if self.temp_unit == "C" else "C"
+        self.unit_btn.config(text=f"Show °{'C' if self.temp_unit == 'F' else 'F'}")
+        city = self.city_entry.get().strip()
+        self.refresh_display(city, self.last_weather if hasattr(self, "last_weather") else None)
+        self.refresh_forecast(city)
+        self.refresh_history()
+        self.refresh_stats()
+
+
+    def convert_temp(self, temp_c):
+        return temp_c if self.temp_unit == "C" else temp_c * 9/5 + 32
+
+
+    def get_weather(self):
+        # Always destroy suggestions listbox if it exists
+        if self.suggestions_listbox:
+            self.suggestions_listbox.destroy()
+            self.suggestions_listbox = None
+
+        city_disp = self.city_entry.get().strip()
+        if not city_disp:
+            messagebox.showerror("Error", "Please enter a city name.")
+            return
+
+        if city_disp not in self.suggestion_coords:
+            messagebox.showerror("Error", "Please select a valid city from suggestions.")
+            return
+
+        lat, lon = self.suggestion_coords[city_disp]
+
+        try:
+            weather = fetch_weather_by_coords(lat, lon)
+            self.last_weather = weather
+        except Exception as e:
+            messagebox.showerror("Error", f"Could not fetch weather: {e}")
+            return
+
+        self.db.insert_weather(
+            city=city_disp,
+            temp=weather["temp"],
+            feels_like=weather["feels_like"],
+            weather=title_case(weather["weather"]),
+            humidity=weather["humidity"],
+            pressure=weather["pressure"],
+            visibility=weather["visibility"],
+            wind=weather["wind"],
+            sea_level=weather["sea_level"],
+            grnd_level=weather["grnd_level"],
+            sunrise=weather["sunrise"],
+            sunset=weather["sunset"]
+        )
+
+        self.refresh_display(city_disp, weather)
+        self.refresh_history()
+        self.refresh_stats()
+        self.refresh_forecast(city_disp)
+
+        # ✅ Update refresh time and file
+        self.last_refresh_time = time.strftime("%Y-%m-%d %H:%M:%S")
+        self.next_refresh_seconds = 60  # reset countdown
+
+        with open(os.path.join("data", "last_refresh.txt"), "w") as f:
+            f.write(self.last_refresh_time)
+
+        if hasattr(self, 'refresh_label'):
+            self.refresh_label.config(
+                text=f"Last refreshed: {self.last_refresh_time}  •••  Next refresh in: {self.next_refresh_seconds} s"
+            )
+
+
+    def refresh_display(self, city, weather):
+        # Clear previous content
+        for widget in self.weather_info_frame.winfo_children():
+            widget.destroy()
+
+        if not weather:
+            return
+
+        temp = self.convert_temp(weather['temp'])
+        feels_like = self.convert_temp(weather["feels_like"])
+        t_unit = "°C" if self.temp_unit == "C" else "°F"
+
+        visibility = weather.get("visibility", "N/A")
+        if visibility != "N/A" and isinstance(visibility, (int, float)):
+            visibility_km = round(visibility / 1000, 1)
+        else:
+            visibility_km = "N/A"
+
+        # Outer "card"
+        card = tk.Frame(self.weather_info_frame, bg="#222", bd=3, relief="ridge", padx=20, pady=14)
+        card.pack(pady=12)
+
+        # City name
+        tk.Label(card, text=title_case(city), font=("Helvetica Neue", 20, "bold"), fg="#ffe047", bg="#222").pack()
+
+        # Temp line
+        tk.Label(card, text=f"{temp:.1f}{t_unit} (Feels like: {feels_like:.1f}{t_unit})", font=("Helvetica Neue", 16), fg="#fff", bg="#222").pack()
+
+        # Condition
+        tk.Label(card, text=f"🌤️ {title_case(weather['weather'])}", font=("Helvetica Neue", 16), fg="#fff", bg="#222").pack(pady=(0, 6))
+
+        # Divider
+        tk.Label(card, text="──────────────", font=("Helvetica Neue", 12), fg="#555", bg="#222").pack(pady=4)
+
+        # First metrics row
+        row1 = tk.Frame(card, bg="#222")
+        row1.pack(pady=2)
+        tk.Label(row1, text=f"💧 Humidity: {weather['humidity']}%", font=("Helvetica Neue", 14), fg="#bfffa5", bg="#222").grid(row=0, column=0, padx=14, sticky="w")
+        tk.Label(row1, text=f"🌬️ Wind: {weather['wind']}", font=("Helvetica Neue", 14), fg="#43fad8", bg="#222").grid(row=0, column=1, padx=14, sticky="w")
+        tk.Label(row1, text=f"👁️ Visibility: {visibility_km} km", font=("Helvetica Neue", 14), fg="#a1e3ff", bg="#222").grid(row=0, column=2, padx=14, sticky="w")
+
+        # Second metrics row
+        row2 = tk.Frame(card, bg="#222")
+        row2.pack(pady=2)
+        tk.Label(row2, text=f"📄 Pressure: {weather['pressure']} hPa", font=("Helvetica Neue", 14), fg="#ffd580", bg="#222").grid(row=0, column=0, padx=14, sticky="w")
+        tk.Label(row2, text=f"🌅 Sunrise: {weather['sunrise']}", font=("Helvetica Neue", 14), fg="#ffacac", bg="#222").grid(row=0, column=1, padx=14, sticky="w")
+        tk.Label(row2, text=f"🌇 Sunset: {weather['sunset']}", font=("Helvetica Neue", 14), fg="#ffacac", bg="#222").grid(row=0, column=2, padx=14, sticky="w")
+
+
+    def refresh_forecast(self, city=None):
+        for widget in self.block_frame.winfo_children():
+            widget.destroy()
+        self.forecast_blocks.clear()
+        city = city or self.city_entry.get().strip()
+        if not city:
+            self.forecast_header.config(text="Enter a city to view forecast.")
+            self.root.update_idletasks()
+            return
+        city_disp = city or self.city_entry.get().strip()
+        if not city_disp or city_disp not in self.suggestion_coords:
+            self.forecast_header.config(text="Enter a city to view forecast.")
+            self.root.update_idletasks()
+            return
+
+        lat, lon = self.suggestion_coords[city_disp]
+
+        try:
+            days = fetch_5day_forecast_by_coords(lat, lon)
+        except Exception as e:
+            self.forecast_header.config(text=f"Could not fetch forecast: {e}")
+            return
+
+        self.forecast_header.config(
+            text=f"5-Day Forecast for {title_case(city)}:",
+            anchor="center", justify="center", font=("Helvetica Neue", 34, "bold")
+        )
+        for i, day in enumerate(days):
+            dayblock = self._make_forecast_block(self.block_frame, day)
+            dayblock.grid(row=0, column=i, sticky="nsew", padx=28, ipadx=14, ipady=80)
+            self.block_frame.columnconfigure(i, weight=1)
+            self.forecast_blocks.append(dayblock)
+        self.root.update_idletasks()
+
+
+    def _make_forecast_block(self, parent, day):
+        color = "#ffe047"
+        weather_main = day['weather'].lower()
+        if "clear" in weather_main:
+            icon = "☀️"
+        elif "cloud" in weather_main:
+            icon = "⛅"
+        elif "rain" in weather_main:
+            icon = "🌧️"
+        elif "storm" in weather_main or "thunder" in weather_main:
+            icon = "⛈️"
+        elif "snow" in weather_main:
+            icon = "❄️"
+        elif "haze" in weather_main:
+            icon = "🌫️"
+        else:
+            icon = "🌡️"
+
+        temp_min = self.convert_temp(day['temp_min'])
+        temp_max = self.convert_temp(day['temp_max'])
+        t_unit = "°C" if self.temp_unit == "C" else "°F"
+
+        f = tk.Frame(parent, bg="#222", bd=3, relief="ridge", padx=14, pady=12)
+
+        content = tk.Frame(f, bg="#222")
+        content.pack(expand=True)
+
+        tk.Label(content, text=day['date'], font=("Helvetica Neue", 16, "bold"), fg=color, bg="#222").pack(pady=(2, 0), anchor="center")
+        tk.Label(content, text=f"{icon} {title_case(day['weather'])}", font=("Helvetica Neue", 16), fg="#fff", bg="#222").pack(anchor="center")
+        tk.Label(content, text="----------------", font=("Helvetica Neue", 12), fg="#555", bg="#222").pack(pady=(4, 4), anchor="center")
+        tk.Label(content, text=f"{temp_min:.1f}{t_unit} - {temp_max:.1f}{t_unit}", font=("Helvetica Neue", 16, "bold"), fg="#ffe047", bg="#222").pack(pady=(0, 8), anchor="center")
+        tk.Label(content, text=f"Humidity: {day['humidity']}%", font=("Helvetica Neue", 15), fg="#bfffa5", bg="#222").pack(anchor="center")
+        tk.Label(content, text=f"Wind: {day.get('wind', 'N/A')}", font=("Helvetica Neue", 15), fg="#43fad8", bg="#222").pack(anchor="center")
+        tk.Label(content, text=f"Visibility: {day.get('visibility', 'N/A')} km (max 10 km)", font=("Helvetica Neue", 15), fg="#a1e3ff", bg="#222").pack(anchor="center")
+
+        return f
+
+
+    def treeview_sort_column(self, tv, col, reverse):
+        l = [(tv.set(k, col), k) for k in tv.get_children('')]
+        try:
+            l.sort(
+                key=lambda t: float(t[0].split()[0].replace("°C", "").replace("°F", "")
+                                .replace("%", "").replace("m/s", "").replace("hPa", "")),
+                reverse=reverse
+            )
+        except ValueError:
+            l.sort(reverse=reverse)
+
+        for index, (val, k) in enumerate(l):
+            tv.move(k, '', index)
+
+        for c in tv["columns"]:
+            base_text = c.replace("_", " ").title()
+            tv.heading(c, text=base_text, command=lambda _col=c: self.treeview_sort_column(tv, _col, False))
+
+        arrow = " ▲" if not reverse else " ▼"
+        tv.heading(col, text=col.replace("_", " ").title() + arrow,
+                command=lambda: self.treeview_sort_column(tv, col, not reverse))
+        
+
+    def create_history_tab(self):
+        columns = ("timestamp", "city", "temp", "feels_like", "weather", "humidity", "pressure",
+                "visibility", "wind", "sea_level", "grnd_level", "sunrise", "sunset")
+        self.tree = ttk.Treeview(self.history_frame, columns=columns, show="headings", height=18)
+        self.tree.pack(fill="both", expand=True, padx=12, pady=(14, 0))
+
+        style = ttk.Style()
+        style.theme_use("default")
+        style.configure("Treeview.Heading", font=("Helvetica Neue", 14, "bold"), background="#444", foreground="#DEAFEE")
+        style.configure("Treeview", font=NORMAL_FONT, rowheight=26, background="black", fieldbackground="black", foreground="white")
+        style.map("Treeview", background=[('selected', '#555')], foreground=[('selected', '#fff')])
+
+        self.tree.tag_configure('centered', anchor='center')
+
+        for col in columns:
+            display_text = col.replace("_", " ").title()
+            if col == "timestamp":
+                self.tree.column(col, anchor="center", width=200)
+            elif col == "city":
+                self.tree.column(col, anchor="center", width=250)
+            else:
+                self.tree.column(col, anchor="center", width=120)
+
+            self.tree.heading(col, text=display_text, command=lambda _col=col: self.treeview_sort_column(self.tree, _col, False))
+
+        self.history_footer = tk.Label(self.history_frame, text=HISTORY_FOOTER, font=NORMAL_FONT, fg="#fff", bg="black")
+        self.history_footer.pack(side="bottom", pady=(0, 12))
+
+
+    def refresh_history(self):
+        for i in self.tree.get_children():
+            self.tree.delete(i)
+        entries = self.db.get_all_history()
+        if not entries:
+            self.tree.insert("", "end", values=["No history found."] + [""] * 13)
+            return
+
+        t_unit = "°C" if self.temp_unit == "C" else "°F"
+
+        for entry in entries:
+            try:
+                temp = float(entry[2]) if entry[2] is not None else None
+                temp_str = f"{self.convert_temp(temp):.2f}{t_unit}" if temp is not None else "N/A"
+            except (ValueError, TypeError):
+                temp_str = "N/A"
+
+            try:
+                feels_like = float(entry[3]) if entry[3] is not None else None
+                feels_like_str = f"{self.convert_temp(feels_like):.2f}{t_unit}" if feels_like is not None else "N/A"
+            except (ValueError, TypeError):
+                feels_like_str = "N/A"
+
+            row = (
+                entry[0], entry[1],
+                temp_str,
+                feels_like_str,
+                entry[4] or "N/A",
+                entry[5] or "N/A",
+                entry[6] or "N/A",
+                entry[7] or "N/A",
+                entry[8] or "N/A",
+                entry[9] or "N/A",
+                entry[10] or "N/A",
+                entry[11] or "N/A",
+                entry[12] or "N/A"
+            )
+            self.tree.insert("", "end", values=row, tags=('centered',))
+        self.root.update_idletasks()
+
+
+    def create_stats_tab(self):
+        self.stats_frame_inner = tk.Frame(self.stats_frame, bg="black")
+        self.stats_frame_inner.pack(expand=True, fill="both", pady=(14, 0))
+        self.stats_footer = tk.Label(self.stats_frame, text=STATS_FOOTER, font=SMALL_FONT, fg="#fff", bg="black")
+        self.stats_footer.pack(side="bottom", pady=(0, 12))
+
+
+    def refresh_stats(self):
+        for w in self.stats_frame_inner.winfo_children():
+            w.destroy()
+
+        header_label = tk.Label(self.stats_frame_inner, text="SQL Statistics of Weather History", font=HEADER_FONT, fg="#ffe047", bg="black")
+        header_label.pack(pady=(10, 20))
+
+        stats = self.db.get_stats()
+        if not stats:
+            tk.Label(self.stats_frame_inner, text="No statistics available yet. Search for a city first!", font=NORMAL_FONT, fg="#fff", bg="black").pack(pady=24)
+            return
+
+        hottest_temp = stats['hottest_raw']
+        coldest_temp = stats['coldest_raw']
+        if self.temp_unit == "F":
+            hottest_temp = hottest_temp * 9 / 5 + 32
+            coldest_temp = coldest_temp * 9 / 5 + 32
+
+        summary_grid = tk.Frame(self.stats_frame_inner, bg="black")
+        summary_grid.pack(anchor="center", pady=(4, 18))
+
+        summary_rows = [
+            ("🔥 Hottest", f"{hottest_temp:.2f}°{self.temp_unit}", stats['hottest_city'], stats['hottest_time']),
+            ("❄️ Coldest", f"{coldest_temp:.2f}°{self.temp_unit}", stats['coldest_city'], stats['coldest_time']),
+            ("⛅ Strongest Wind", stats['strongest_wind'], stats['strongest_wind_city'], stats['strongest_wind_time']),
+            ("💧 Most Humid", stats['most_humid'], stats['most_humid_city'], stats['most_humid_time']),
+        ]
+
+        for i, (label, value, city, time) in enumerate(summary_rows):
+            tk.Label(summary_grid, text=label, font=NORMAL_FONT, fg="#fff", bg="black", anchor="w", width=18).grid(row=i, column=0, sticky="w", padx=(12, 8), pady=2)
+            tk.Label(summary_grid, text=value, font=NORMAL_FONT, fg="#ffe047", bg="black", anchor="w", width=12).grid(row=i, column=1, sticky="w", padx=8, pady=2)
+            tk.Label(summary_grid, text=city, font=NORMAL_FONT, fg="#43fad8", bg="black", anchor="w", width=22).grid(row=i, column=2, sticky="w", padx=8, pady=2)
+            tk.Label(summary_grid, text=time, font=NORMAL_FONT, fg="#ccc", bg="black", anchor="w", width=20).grid(row=i, column=3, sticky="w", padx=8, pady=2)
+
+        avg_temp = stats['avg_temp']
+        t_unit = "°C"
+        if self.temp_unit == "F":
+            avg_temp = avg_temp * 9 / 5 + 32
+            t_unit = "°F"
+        avg_temp_text = f"{avg_temp:.1f}{t_unit}"
+
+        grid = tk.Frame(self.stats_frame_inner, bg="black")
+        grid.pack(anchor="n", pady=(4, 0))
+
+        rows = [
+            ("Total logs:", stats['log_count']),
+            ("Most searched city:", stats['most_searched']),
+            ("Average temperature:", avg_temp_text),
+            ("Average humidity:", f"{stats['avg_humidity']}%"),
+            ("Average pressure:", f"{stats['avg_pressure']} hPa"),
+            ("Average wind speed:", f"{stats['avg_wind']:.2f} m/s"),
+        ]
+        rows.extend([
+            ("Average sea level pressure:", f"{stats['avg_sea_level']} hPa"),
+            ("Highest sea level:", f"{stats['highest_sea_value']} in {stats['highest_sea_city']} at {stats['highest_sea_time']}"),
+            ("Average ground level pressure:", f"{stats['avg_ground_level']} hPa"),
+            ("Lowest ground level:", f"{stats['lowest_ground_value']} in {stats['lowest_ground_city']} at {stats['lowest_ground_time']}"),
+            ("Earliest sunrise:", f"{stats['earliest_sunrise_time']} in {stats['earliest_sunrise_city']}"),
+            ("Latest sunset:", f"{stats['latest_sunset_time']} in {stats['latest_sunset_city']}"),
+        ])
+
+        for i, (k, v) in enumerate(rows):
+            tk.Label(grid, text=k, font=NORMAL_FONT, fg="#ccc", bg="black", anchor="e").grid(row=i, column=0, sticky="e", pady=1, padx=(24, 8))
+            tk.Label(grid, text=v, font=NORMAL_FONT, fg="#fff", bg="black", anchor="w").grid(row=i, column=1, sticky="w", pady=1)
+
+
+    def on_tab_change(self, event):
+        idx = self.tabs.index(self.tabs.select())
+        if idx == 0:
+            self.refresh_forecast(self.city_entry.get().strip())
+        elif idx == 1:
+            self.refresh_history()
+        elif idx == 2:
+            self.refresh_stats()
+    
+
+    def next_tab(self, event=None):
+        current = self.tabs.index(self.tabs.select())
+        next_index = (current + 1) % len(self.tabs.tabs())
+        self.tabs.select(next_index)
+        return "break"  # Prevent default focus change
+
+
+    def prev_tab(self, event=None):
+        current = self.tabs.index(self.tabs.select())
+        prev_index = (current - 1) % len(self.tabs.tabs())
+        self.tabs.select(prev_index)
+        return "break"  # Prevent default focus change
+
+
+    def ask_user_to_choose_location(self, options):
+        """
+        Show a popup window to let the user choose a location option.
+        Returns the chosen string.
+        """
+        popup = tk.Toplevel(self.root)
+        popup.title("Select Location")
+        popup.configure(bg="black")
+        tk.Label(popup, text="Did you mean:", font=NORMAL_FONT, fg="#fff", bg="black").pack(pady=(10, 5))
+
+        choice_var = tk.StringVar(value=options[0])
+
+        for opt in options:
+            tk.Radiobutton(popup, text=opt, variable=choice_var, value=opt,
+                        font=SMALL_FONT, fg="#fff", bg="black",
+                        selectcolor="#444", activebackground="black").pack(anchor="w", padx=20)
+
+        def on_select():
+            popup.destroy()
+
+        tk.Button(popup, text="OK", font=NORMAL_FONT, command=on_select).pack(pady=(8, 10))
+        popup.grab_set()  # Make it modal
+        popup.wait_window()
+
+        return choice_var.get()
+
+
+    def show_suggestions(self, suggestions):
+        if self.suggestions_listbox:
+            self.suggestions_listbox.destroy()
+
+        if not suggestions:
+            return
+
+        self.suggestion_coords = {s: (opt["lat"], opt["lon"]) for opt, s in zip(suggestions, [opt["display"] for opt in suggestions])}
+
+        self.suggestions_listbox = tk.Listbox(
+            self.root,
+            font=("Helvetica Neue", 14),
+            bg="#111",
+            fg="#fff",
+            highlightthickness=2,
+            highlightbackground="#DEAFEE",
+            selectbackground="#DEAFEE",
+            selectforeground="#111",
+            relief="solid",
+            bd=1,
+            height=min(len(suggestions), 6),
+            activestyle="none"
+        )
+
+        x = self.city_entry.winfo_rootx() - self.root.winfo_rootx()
+        y = self.city_entry.winfo_rooty() - self.root.winfo_rooty() + self.city_entry.winfo_height()
+        self.suggestions_listbox.place(x=x, y=y, width=self.city_entry.winfo_width())
+
+        for opt in suggestions:
+            self.suggestions_listbox.insert(tk.END, opt["display"])
+
+        self.suggestions_listbox.bind("<<ListboxSelect>>", self.on_suggestion_selected)
+        
+
+    def on_suggestion_selected(self, event):
+        if not self.suggestions_listbox:
+            return
+        selection = self.suggestions_listbox.get(self.suggestions_listbox.curselection())
+        self.city_entry.delete(0, tk.END)
+        self.city_entry.insert(0, selection)
+        self.suggestions_listbox.destroy()
+        self.suggestions_listbox = None
+
+
+    def fetch_suggestions(self):
+        query = self.city_entry.get().strip()
+        if not query or len(query) < 2:
+            if self.suggestions_listbox:
+                self.suggestions_listbox.destroy()
+                self.suggestions_listbox = None
+            return
+
+        def worker():
+            options = search_city_options(query)
+            self.root.after(0, lambda: self.show_suggestions(options))
+            
+        threading.Thread(target=worker, daemon=True).start()
+
+
+    def on_typing(self, event):
+        if event.keysym in ["Up", "Down", "Left", "Right", "Return", "Tab", 
+                            "Shift_L", "Shift_R", "Control_L", "Control_R", 
+                            "Alt_L", "Alt_R", "Escape"]:
+            return
+
+        if self.typing_timer:
+            self.root.after_cancel(self.typing_timer)
+        self.typing_timer = self.root.after(300, self.fetch_suggestions)
+
+
+    def on_enter_key(self, event):
+        city_disp = self.city_entry.get().strip()
+        # Check if it matches one of the valid suggestions
+        if city_disp in self.suggestion_coords:
+            self.get_weather()
+            # Also destroy the suggestion box if still visible
+            if self.suggestions_listbox:
+                self.suggestions_listbox.destroy()
+                self.suggestions_listbox = None
+        else:
+            messagebox.showwarning("Selection required", "Please select a city from the suggestions before pressing Enter.")
+
+
+    def focus_suggestions(self, event):
+        if self.suggestions_listbox:
+            self.suggestions_listbox.selection_clear(0, tk.END)
+            self.suggestions_listbox.selection_set(0)
+            return "break"  # Stop Entry from moving cursor
+
+
+    def start_auto_refresh(self):
+        self.next_refresh_seconds = 60
+
+        # Load from file if exists (do this at startup)
+        refresh_path = os.path.join("data", "last_refresh.txt")
+        if os.path.exists(refresh_path):
+            with open(refresh_path, "r") as f:
+                self.last_refresh_time = f.read().strip()
+        else:
+            self.last_refresh_time = "never"
+
+        def update_timer():
+            if self.next_refresh_seconds > 0:
+                self.next_refresh_seconds -= 1
+
+            if hasattr(self, 'refresh_label'):
+                self.refresh_label.config(
+                    text=f"Last refreshed: {self.last_refresh_time}  •••  Next refresh in: {self.next_refresh_seconds} s"
+                )
+
+            self.root.after(1000, update_timer)
+
+        def refresh():
+            city_disp = self.city_entry.get().strip()
+            if city_disp and city_disp in self.suggestion_coords:
+                self.get_weather()
+            else:
+                # Even if no city selected, update time to show that background ran
+                self.last_refresh_time = time.strftime("%Y-%m-%d %H:%M:%S")
+                self.next_refresh_seconds = 60
+
+                with open(os.path.join("data", "last_refresh.txt"), "w") as f:
+                    f.write(self.last_refresh_time)
+
+                if hasattr(self, 'refresh_label'):
+                    self.refresh_label.config(
+                        text=f"Last refreshed: {self.last_refresh_time}  •••  Next refresh in: {self.next_refresh_seconds} s"
+                    )
+
+            # Reset countdown
+            self.next_refresh_seconds = 60
+            self.root.after(60000, refresh)
+
+        # Start both loops
+        self.root.after(1000, update_timer)
+        self.root.after(60000, refresh)
