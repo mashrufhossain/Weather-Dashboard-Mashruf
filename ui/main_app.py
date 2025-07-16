@@ -234,6 +234,7 @@ class WeatherApp:
 
         # ✅ Update refresh time and store it
         self.last_refresh_time = time.strftime("%Y-%m-%d %H:%M:%S")
+
         self.next_refresh_seconds = 60  # reset countdown
 
         with open(os.path.join("data", "last_refresh.txt"), "w") as f:
@@ -338,17 +339,17 @@ class WeatherApp:
         if self.suggestions_listbox:
             self.suggestions_listbox.destroy()
 
-        # Return if no suggestions to show
+        # Return early if no suggestions to show
         if not suggestions:
             return
 
-        # Map displayed text to coordinates
+        # Map display strings to their lat/lon values
         self.suggestion_coords = {
             s: (opt["lat"], opt["lon"]) 
             for opt, s in zip(suggestions, [opt["display"] for opt in suggestions])
         }
 
-        # Create Listbox for suggestions
+        # Create and configure the suggestions listbox
         self.suggestions_listbox = tk.Listbox(
             self.root,
             font=("Helvetica Neue", 14),
@@ -361,26 +362,55 @@ class WeatherApp:
             relief="solid",
             bd=1,
             height=min(len(suggestions), 6),
-            activestyle="none"
+            activestyle="none",
+            exportselection=False
         )
 
-        # Position the Listbox below the city_entry
+        # Place it under the city_entry input
         x = self.city_entry.winfo_rootx() - self.root.winfo_rootx()
         y = self.city_entry.winfo_rooty() - self.root.winfo_rooty() + self.city_entry.winfo_height()
         self.suggestions_listbox.place(x=x, y=y, width=self.city_entry.winfo_width())
 
-        # Insert each suggestion into the Listbox
+        # Insert all suggestions into the listbox
         for opt in suggestions:
             self.suggestions_listbox.insert(tk.END, opt["display"])
 
-        # Bind selection event
-        self.suggestions_listbox.bind("<<ListboxSelect>>", self.on_suggestion_selected)
+        # Handle explicit selection via Enter or mouse click
+        self.suggestions_listbox.bind("<Return>", lambda e: (self.on_suggestion_selected(e), self.city_entry.focus_set()))
+        self.suggestions_listbox.bind("<ButtonRelease-1>", lambda e: (self.on_suggestion_selected(e), self.city_entry.focus_set()))
 
-        # Hover highlight effect
+        # Bind Escape key to close suggestions box when inside as a result of using arrow keys and return focus to entry
+        self.suggestions_listbox.bind("<Escape>", lambda e: (self.suggestions_listbox.destroy(), self.city_entry.focus_set()))
+
+        # Arrow key navigation inside the listbox
+        def on_arrow_key(event):
+            cur = self.suggestions_listbox.curselection()
+            count = self.suggestions_listbox.size()
+
+            if event.keysym == "Down":
+                if cur:
+                    next_index = (cur[0] + 1) % count
+                else:
+                    next_index = 0
+                self.suggestions_listbox.selection_clear(0, tk.END)
+                self.suggestions_listbox.selection_set(next_index)
+                return "break"
+
+            elif event.keysym == "Up":
+                if cur:
+                    prev_index = (cur[0] - 1) % count
+                else:
+                    prev_index = count - 1
+                self.suggestions_listbox.selection_clear(0, tk.END)
+                self.suggestions_listbox.selection_set(prev_index)
+                return "break"
+
+        self.suggestions_listbox.bind("<Up>", on_arrow_key)
+        self.suggestions_listbox.bind("<Down>", on_arrow_key)
+
+        # Hover behavior
         def on_hover(event):
-            # Get index under mouse
             index = self.suggestions_listbox.nearest(event.y)
-            # Only highlight if mouse is within bounds
             if 0 <= event.y <= self.suggestions_listbox.winfo_height():
                 self.suggestions_listbox.selection_clear(0, tk.END)
                 self.suggestions_listbox.selection_set(index)
@@ -388,8 +418,6 @@ class WeatherApp:
                 self.suggestions_listbox.selection_clear(0, tk.END)
 
         self.suggestions_listbox.bind("<Motion>", on_hover)
-
-        # Also clear highlight when mouse leaves the listbox
         self.suggestions_listbox.bind("<Leave>", lambda e: self.suggestions_listbox.selection_clear(0, tk.END))
         
 
@@ -430,17 +458,22 @@ class WeatherApp:
 
 
     def on_typing(self, event):
-        # Skip suggestion logic for control/navigation keys
-        if event.keysym in ["Up", "Down", "Left", "Right", "Return", "Tab", 
-                            "Shift_L", "Shift_R", "Control_L", "Control_R", 
-                            "Alt_L", "Alt_R", "Escape"]:
+        # Allow Down key to move focus to suggestions listbox
+        if event.keysym == "Down":
+            return self.focus_suggestions(event)
+
+        # Skip suggestion logic for non-character control keys
+        if event.keysym in [
+            "Up", "Left", "Right", "Return", "Tab", 
+            "Shift_L", "Shift_R", "Control_L", "Control_R", 
+            "Alt_L", "Alt_R", "Escape"]:
             return
 
-        # Cancel any previous typing suggestion timer
+        # Cancel existing debounce timer if active
         if self.typing_timer:
             self.root.after_cancel(self.typing_timer)
 
-        # Start new delay timer for fetching suggestions
+        # Start a new debounce timer to fetch suggestions
         self.typing_timer = self.root.after(300, self.fetch_suggestions)
 
 
@@ -451,6 +484,7 @@ class WeatherApp:
         # Proceed if city input matches a valid suggestion
         if city_disp in self.suggestion_coords:
             self.get_weather()
+            
             # Clear suggestion box if still visible
             if self.suggestions_listbox:
                 self.suggestions_listbox.destroy()
@@ -461,12 +495,14 @@ class WeatherApp:
 
 
     def focus_suggestions(self, event):
-        # Optional keyboard navigation for suggestions, work in progress.
+        # Keyboard navigation: move focus to the suggestions listbox if it exists
         if self.suggestions_listbox:
-            self.suggestions_listbox.selection_clear(0, tk.END)
-            self.suggestions_listbox.selection_set(0)
 
-            return "break"  # Prevent entry widget default behavior from moving cursor
+            self.suggestions_listbox.focus_set()  # Focus the listbox only
+
+            return "break"  # Stop the event from bubbling up to root window
+        
+        return None
 
 
     def start_auto_refresh(self):
