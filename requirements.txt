@@ -1,2 +1,8 @@
+# requirements.txt
+
+# Project dependencies for Weather Dashboard:
+# - requests: HTTP library for making API calls to OpenWeatherMap API
+# - python-dotenv: Loads environment variables from a .env file (e.g., API keys)
+
 requests==2.31.0
 python-dotenv==1.0.1
