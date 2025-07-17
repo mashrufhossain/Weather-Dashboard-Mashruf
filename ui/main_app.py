@@ -22,7 +22,7 @@ from constants import HISTORY_FOOTER, STATS_FOOTER, FORECAST_FOOTER
 from api import fetch_weather_by_coords, fetch_5day_forecast_by_coords, search_city_options
 
 # Feature tabs
-from features.history import create_history_tab, refresh_history
+from features.history import create_history_tab, refresh_history, treeview_sort_column
 from features.stats import create_stats_tab, refresh_stats
 from features.forecast import create_forecast_tab, refresh_forecast
 
@@ -39,7 +39,7 @@ class WeatherApp:
         # Store city coordinates for selected suggestions
         self.suggestion_coords = {}
 
-        # Connect to SQLite3 database
+        # Connect to SQLite database
         self.db = WeatherDB(os.path.join("data", "weather.db"))
 
         # Default temperature unit is Celsius
@@ -48,6 +48,7 @@ class WeatherApp:
         # Bind feature tab methods to the class instance
         self.create_history_tab = create_history_tab.__get__(self)
         self.refresh_history = refresh_history.__get__(self)
+        self.treeview_sort_column = treeview_sort_column.__get__(self)    # This method is used in the history tab to sort the columns
         self.create_stats_tab = create_stats_tab.__get__(self)
         self.refresh_stats = refresh_stats.__get__(self)
         self.create_forecast_tab = create_forecast_tab.__get__(self)
