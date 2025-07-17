@@ -1,3 +1,10 @@
+"""
+main.py
+
+Entry point for the Weather Dashboard.
+Creates the root Tk window, initializes WeatherApp, and starts the main loop.
+"""
+
 import tkinter as tk
 from ui.main_app import WeatherApp
 

@@ -1,3 +1,15 @@
+"""
+db.py
+
+Database module for Weather Dashboard.
+
+Provides WeatherDB class to manage SQLite database:
+- Establish connection to data/weather.db
+- Initialize the weather table if needed
+- Insert new weather records with timestamps
+- Retrieve recent history and compute various statistics
+"""
+
 import os
 import sqlite3
 from datetime import datetime

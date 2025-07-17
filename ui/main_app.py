@@ -1,6 +1,12 @@
 """
-Main Tkinter UI class for Weather Dashboard.
-Do not run this file directly; use main.py as the entry point.
+ui/main_app.py
+
+Main UI module for Weather Dashboard.
+
+Defines WeatherApp class which:
+- Sets up the root Tkinter window and overall layout
+- Initializes and manages tabs (History, Statistics, Forecast, etc.)
+- Wires up UI components, event handlers, and data-refresh logic
 """
 
 # Guard to prevent this file from being run directly

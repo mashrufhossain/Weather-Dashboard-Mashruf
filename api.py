@@ -1,3 +1,14 @@
+"""
+api.py
+
+API module for Weather Dashboard.
+
+Provides functions to interact with the OpenWeatherMap API:
+- search_city_options(query): Retrieve a list of matching cities with formatted display names and coordinates.
+- fetch_weather_by_coords(lat, lon): Fetch current weather data (temperature, humidity, wind, sunrise/sunset, etc.).
+- fetch_5day_forecast_by_coords(lat, lon): Retrieve 5-day forecast data and summarize it into daily entries (min/max temps, humidity, wind, visibility).
+"""
+
 import os                             # For accessing environment variables
 import requests                       # To make HTTP requests to the weather API
 from datetime import datetime         # For formatting UNIX timestamps into readable times

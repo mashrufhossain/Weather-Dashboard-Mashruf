@@ -1,3 +1,9 @@
+"""
+utils.py
+
+General utility functions for string manipulation and other helpers as needed.
+"""
+
 def title_case(s):
 
     '''

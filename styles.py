@@ -1,4 +1,6 @@
 """
+styles.py
+
 Define fonts and colors for consistent styling across the app.
 """
 
