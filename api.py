@@ -22,10 +22,11 @@ load_dotenv()
 API_KEY = os.getenv("OPENWEATHER_API_KEY")
 
 def search_city_options(query):
-    """
+
+    '''
     Get city options from Geocoding API, return list of dicts:
     { 'display': formatted string, 'lat': ..., 'lon': ... }
-    """
+    '''
 
     # Define the geocoding endpoint for searching cities
     url = "http://api.openweathermap.org/geo/1.0/direct"
