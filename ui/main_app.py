@@ -33,7 +33,7 @@ class WeatherApp:
         self.root = root
         root.title("Weather Dashboard")
         root.configure(bg="black")
-        root.geometry("1900x1025")
+        root.geometry("1900x1100")
         root.minsize(1400, 800)
 
         # Store city coordinates for selected suggestions
