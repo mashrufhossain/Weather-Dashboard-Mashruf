@@ -15,5 +15,5 @@ __pycache__/
 data/
 *.log
 
-# Class instructions
-instructions.md
+# Classwork
+docs/
