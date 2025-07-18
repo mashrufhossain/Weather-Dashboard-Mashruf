@@ -13,6 +13,7 @@ __pycache__/
 
 # Data and logs
 data/weather.db
+data/last_refresh.txt
 *.log
 
 # Classwork
