@@ -21,6 +21,42 @@ load_dotenv()
 # Fetch the OpenWeatherMap API key from environment variables
 API_KEY = os.getenv("OPENWEATHER_API_KEY")
 
+
+def _get_json(url, params=None):
+
+    """
+    Internal helper to perform a GET request with timeout and HTTP-status checks.
+
+    Args:
+        url (str): Endpoint URL.
+        params (dict, optional): Query parameters.
+
+    Returns:
+        dict or list: Parsed JSON payload.
+
+    Raises:
+        Exception: on timeout, network error, or non-200 HTTP status.
+    """
+
+    # Attempt to call the API with a 5-second timeout to avoid hanging
+    try:
+        r = requests.get(url, params=params, timeout=5)
+    except requests.Timeout:
+        raise Exception(f"Request to {url} timed out after 5 seconds")
+    except requests.RequestException as e:
+        raise Exception(f"Network error contacting {url}: {e}")
+
+    # Check HTTP response status. Raise with API-provided message on error
+    if r.status_code != 200:
+        try:
+            msg = r.json().get("message", r.text)
+        except ValueError:
+            msg = r.text
+        raise Exception(f"API returned {r.status_code} for {url}: {msg}")
+
+    return r.json()
+
+
 def search_city_options(query):
 
     '''
@@ -38,14 +74,12 @@ def search_city_options(query):
         "appid": API_KEY
     }
 
-    # Make the request to the API
-    r = requests.get(url, params=params)
-    data = r.json()
+    data = _get_json(url, params)
 
     options = []     # Store city suggestions
 
     for loc in data:
-        # Extract location details safely
+        # Extract location details
         name = loc.get("name", "")
         state = loc.get("state", "")
         if state:
@@ -76,14 +110,8 @@ def fetch_weather_by_coords(lat, lon):
     # Build API URL for current weather based on coordinates
     url = f"http://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={API_KEY}&units=metric"
 
-    # Make the request and parse the response
-    r = requests.get(url)
-    data = r.json()
+    data = _get_json(url)
 
-    # Basic error handling if API fails
-    if r.status_code != 200:
-        raise Exception(data.get("message", "API error"))
-    
     # Get wind direction in degrees (if available)
     wind_deg = data["wind"].get("deg")
     wind_deg_str = f"{wind_deg:.0f}°" if wind_deg is not None else "N/A"
@@ -114,9 +142,7 @@ def fetch_5day_forecast_by_coords(lat, lon):
     # Build URL for 5-day forecast
     url = f"https://api.openweathermap.org/data/2.5/forecast?lat={lat}&lon={lon}&appid={API_KEY}&units=metric"
 
-    # Make request and parse the JSON response
-    r = requests.get(url)
-    data = r.json()
+    data = _get_json(url)
 
     # Raise exception if forecast data is missing
     if "list" not in data:
