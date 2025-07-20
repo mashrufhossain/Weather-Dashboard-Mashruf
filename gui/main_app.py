@@ -25,7 +25,7 @@ from styles import HEADER_FONT, NORMAL_FONT, SMALL_FONT, TAB_BG, TAB_FG, ACTIVE_
 from constants import HISTORY_FOOTER, STATS_FOOTER, FORECAST_FOOTER
 
 # API calls
-from api import fetch_weather_by_coords, fetch_5day_forecast_by_coords, search_city_options
+from api import fetch_weather_by_coords, fetch_5day_forecast_by_coords, search_city_options, APIError
 
 # Feature tabs
 from features.history import create_history_tab, refresh_history, treeview_sort_column
@@ -213,8 +213,13 @@ class WeatherApp:
             # Fetch current weather data
             weather = fetch_weather_by_coords(lat, lon)
             self.last_weather = weather
-        except Exception as e:
-            messagebox.showerror("Error", f"Could not fetch weather: {e}")
+        except APIError:
+            # Handle API call failure
+            messagebox.showerror(
+                "Error",
+                "Could not fetch current weather at this time. "
+                "Please check API status and try again later."
+            )
             return
 
         # Save weather information to database

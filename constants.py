@@ -23,5 +23,5 @@ STATS_FOOTER = (
 
 # Footer displayed in the Forecast tab describing predictive data
 FORECAST_FOOTER = (
-    "This tab displays predictive forecasts for the city entered."
+    "This tab displays a 5-day predictive forecast for the city entered."
 )

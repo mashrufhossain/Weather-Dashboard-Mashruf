@@ -13,7 +13,9 @@ import tkinter as tk                             # Tkinter for GUI widgets
 from styles import SMALL_FONT                    # Consistent small font definition
 from constants import FORECAST_FOOTER            # Footer text for forecast tab
 from api import fetch_5day_forecast_by_coords    # Function to retrieve 5-day forecast data
+from api import APIError                         # Class for handling API errors
 from utils import title_case                     # Helper to title-case weather descriptions
+import threading                                 # Run background tasks
 
 
 def create_forecast_tab(self):
@@ -87,26 +89,42 @@ def refresh_forecast(self, city=None):
     # Look up lat/lon from suggestions mapping
     lat, lon = self.suggestion_coords[city_disp]
 
+    # Start background fetch to avoid blocking the UI
+    def _worker():
+        # Attempt API call
+        try:
+            days = fetch_5day_forecast_by_coords(lat, lon)
 
-    # Attempt API call, show error on failure
-    try:
-        days = fetch_5day_forecast_by_coords(lat, lon)
-    except Exception as e:
-        self.forecast_header.config(text=f"Could not fetch forecast: {e}")
-        return
-    
-    # Update header with formatted city name
-    self.forecast_header.config(
-        text=f"5-Day Forecast for {title_case(city)}:",
-        anchor="center", justify="center", font=("Helvetica Neue", 34, "bold")
-    )
+        except APIError:
+            # 2) On any APIError, show a friendly message on the main thread
+            self.root.after(0, lambda:
+                self.forecast_header.config(
+                    text="Could not fetch 5-day forecast at this time. "
+                         "Please check API status and try again later."
+                )
+            )
+            return
 
-    # Create and grid each day's forecast block
-    for i, day in enumerate(days):
-        dayblock = _make_forecast_block(self.block_frame, day, self.convert_temp, self.temp_unit)
-        dayblock.grid(row=0, column=i, sticky="nsew", padx=28, ipadx=14, ipady=80)
-        self.block_frame.columnconfigure(i, weight=1)
-        self.forecast_blocks.append(dayblock)
+        # Update header with formatted city name
+        self.root.after(0, lambda: self.forecast_header.config(
+            text=f"5-Day Forecast for {title_case(city_disp)}:",
+            anchor="center", justify="center", font=("Helvetica Neue", 34, "bold")
+        ))
+
+        # Create and grid each day's forecast block
+        def _populate():
+            for i, day in enumerate(days):
+                dayblock = _make_forecast_block(
+                    self.block_frame, day, self.convert_temp, self.temp_unit
+                )
+                dayblock.grid(
+                    row=0, column=i, sticky="nsew", padx=28, ipadx=14, ipady=80
+                )
+                self.block_frame.columnconfigure(i, weight=1)
+                self.forecast_blocks.append(dayblock)
+        self.root.after(0, _populate)
+
+    threading.Thread(target=_worker, daemon=True).start()
 
 
 def _make_forecast_block(parent, day, convert_temp_func, temp_unit):

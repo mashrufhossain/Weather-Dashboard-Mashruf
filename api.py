@@ -22,6 +22,11 @@ load_dotenv()
 API_KEY = os.getenv("OPENWEATHER_API_KEY")
 
 
+class APIError(Exception):
+    """Custom exception for API-related errors."""
+    pass
+
+
 def _get_json(url, params=None):
 
     """
@@ -29,32 +34,39 @@ def _get_json(url, params=None):
 
     Args:
         url (str): Endpoint URL.
-        params (dict, optional): Query parameters.
+        params (dict, optional): Query parameters to include in the request.
 
     Returns:
-        dict or list: Parsed JSON payload.
+        dict or list: Parsed JSON payload on success.
 
     Raises:
-        Exception: on timeout, network error, or non-200 HTTP status.
+        APIError: On timeout, network error, or non-200 HTTP status.
     """
-
-    # Attempt to call the API with a 5-second timeout to avoid hanging
+    
     try:
-        r = requests.get(url, params=params, timeout=5)
+        # Attempt the HTTP GET with a short timeout to avoid hanging the app
+        response = requests.get(url, params=params, timeout=5)
+
     except requests.Timeout:
-        raise Exception(f"Request to {url} timed out after 5 seconds")
+        # Raised when the request exceeds the timeout limit
+        raise APIError(f"Request to {url} timed out after 5 seconds")
+    
     except requests.RequestException as e:
-        raise Exception(f"Network error contacting {url}: {e}")
+        # Catches other network-related errors (DNS failure, refused connection, etc.)
+        raise APIError(f"Network error contacting {url}: {e}")
 
-    # Check HTTP response status. Raise with API-provided message on error
-    if r.status_code != 200:
+    # If the status code is not 200 OK, extract the API's error message if possible
+    if response.status_code != 200:
         try:
-            msg = r.json().get("message", r.text)
-        except ValueError:
-            msg = r.text
-        raise Exception(f"API returned {r.status_code} for {url}: {msg}")
+            error_info = response.json().get("message", response.text)
 
-    return r.json()
+        except ValueError:
+            # JSON decoding failed, fall back to raw text
+            error_info = response.text
+        raise APIError(f"API returned status {response.status_code} for {url}: {error_info}")
+
+    # If successful, Return the parsed JSON
+    return response.json()
 
 
 def search_city_options(query):
