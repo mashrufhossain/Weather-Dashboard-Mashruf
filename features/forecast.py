@@ -96,7 +96,7 @@ def refresh_forecast(self, city=None):
             days = fetch_5day_forecast_by_coords(lat, lon)
 
         except APIError:
-            # 2) On any APIError, show a friendly message on the main thread
+            # On any APIError, show a friendly message on the main thread
             self.root.after(0, lambda:
                 self.forecast_header.config(
                     text="Could not fetch 5-day forecast at this time. "
