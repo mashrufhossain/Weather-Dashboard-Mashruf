@@ -18,6 +18,9 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import os, time, threading
 
+# Logging for developer error tracking
+import logging
+
 # Core logic and styling/constants
 from db import WeatherDB
 from utils import title_case
@@ -214,10 +217,13 @@ class WeatherApp:
             weather = fetch_weather_by_coords(lat, lon)
             self.last_weather = weather
         except APIError:
-            # Handle API call failure
+            # Record the error message and full stack trace in the console for debugging
+            logging.exception("Failed to fetch current weather")
+
+            # Show a user-friendly popup in the GUI
             messagebox.showerror(
                 "Error",
-                "Could not fetch current weather at this time. "
+                "Could not fetch current weather at this time.\n"
                 "Please check API status and try again later."
             )
             return

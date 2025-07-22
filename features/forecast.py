@@ -10,12 +10,14 @@ Defines functions to:
 """
 
 import tkinter as tk                             # Tkinter for GUI widgets
+import tkinter.messagebox as messagebox          # Show user alerts
 from styles import SMALL_FONT                    # Consistent small font definition
 from constants import FORECAST_FOOTER            # Footer text for forecast tab
 from api import fetch_5day_forecast_by_coords    # Function to retrieve 5-day forecast data
 from api import APIError                         # Class for handling API errors
 from utils import title_case                     # Helper to title-case weather descriptions
 import threading                                 # Run background tasks
+import logging                                   # Logging for developer error tracking
 
 
 def create_forecast_tab(self):
@@ -96,13 +98,14 @@ def refresh_forecast(self, city=None):
             days = fetch_5day_forecast_by_coords(lat, lon)
 
         except APIError:
-            # On any APIError, show a friendly message on the main thread
-            self.root.after(0, lambda:
-                self.forecast_header.config(
-                    text="Could not fetch 5-day forecast at this time. "
-                         "Please check API status and try again later."
-                )
-            )
+            logging.exception("Failed to fetch 5-day forecast")
+
+            # Show a user-friendly popup (title first, then message)
+            self.root.after(0, lambda: messagebox.showerror(
+                "Forecast Error",
+                "Could not fetch 5-day forecast at this time.\n"
+                "Please check API status and try again later."
+            ))
             return
 
         # Update header with formatted city name
