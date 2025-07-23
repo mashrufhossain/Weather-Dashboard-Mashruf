@@ -38,7 +38,16 @@ from features.forecast import create_forecast_tab, refresh_forecast, update_fore
 
 class WeatherApp:
     def __init__(self, root):
-        # Initialize main app window
+        
+        '''
+    Initialize the WeatherApp:
+    - Configure main Tkinter window (title, size, colors)
+    - Initialize suggestion mapping and database connection
+    - Set default temperature unit
+    - Bind feature-tab methods to this instance
+    - Build UI, load last refresh time, and start auto-refresh loop
+        '''
+
         self.root = root
         root.title("Weather Dashboard")
         root.configure(bg="black")
@@ -90,6 +99,15 @@ class WeatherApp:
 
 
     def create_widgets(self):
+
+        '''
+    Build and layout static UI components:
+    - Header, input frame, labels, entry field, and buttons
+    - Main weather display frame
+    - Styled Notebook with Forecast, History, and Stats tabs
+    - Keyboard bindings for tab navigation
+        '''
+
         # Header label
         header = tk.Label(self.root, text="What's in Your Sky?", font=HEADER_FONT, fg="#DEAFEE", bg="black")
         header.pack(pady=(24, 20))
@@ -174,6 +192,14 @@ class WeatherApp:
 
 
     def toggle_unit(self):
+
+        '''
+    Switch between Celsius and Fahrenheit:
+    - Flip the temp_unit flag
+    - Update toggle button label
+    - Refresh displayed weather, forecast, history, and stats
+        '''
+
         # Toggle between Celsius and Fahrenheit
         self.temp_unit = "F" if self.temp_unit == "C" else "C"
 
@@ -194,6 +220,13 @@ class WeatherApp:
 
 
     def get_weather(self):
+
+        '''
+    Validate city selection, fetch current weather, handle errors,
+    save data to the database, and update all UI sections (display,
+    history, stats, forecast). Record and display the new refresh time.
+        '''
+
         # Clears the suggestion list if present
         if self.suggestions_listbox:
             self.suggestions_listbox.destroy()
@@ -267,6 +300,14 @@ class WeatherApp:
 
 
     def refresh_display(self, city, weather):
+
+        '''
+    Clear and rebuild the main weather card for a given city:
+    - Convert and format temps, visibility, etc.
+    - Create a styled frame showing city, temperature,
+      condition icon, and detailed metrics.
+        '''
+
         # Clear previous weather card content
         for widget in self.weather_info_frame.winfo_children():
             widget.destroy()
@@ -319,6 +360,13 @@ class WeatherApp:
 
 
     def on_tab_change(self, event):
+
+        '''
+    Notebook tab-change handler:
+    - Detect selected tab index and trigger appropriate refresh:
+      0→forecast, 1→history, 2→stats
+        '''
+
         # Determine which tab is selected by index
         idx = self.tabs.index(self.tabs.select())
 
@@ -336,6 +384,12 @@ class WeatherApp:
     
 
     def next_tab(self, event=None):
+        
+        '''
+    Move focus to the next Notebook tab (wraps at end)
+    and prevent default widget focus change.
+        '''
+
         # Move to the next tab (loop around if at the end)
         current = self.tabs.index(self.tabs.select())
         next_index = (current + 1) % len(self.tabs.tabs())
@@ -345,6 +399,12 @@ class WeatherApp:
 
 
     def prev_tab(self, event=None):
+
+        '''
+    Move focus to the previous Notebook tab (wraps at start)
+    and prevent default widget focus change.
+        '''
+
         # Move to the previous tab (loop around if at the start)
         current = self.tabs.index(self.tabs.select())
         prev_index = (current - 1) % len(self.tabs.tabs())
@@ -354,6 +414,14 @@ class WeatherApp:
     
 
     def show_suggestions(self, suggestions):
+
+        '''
+    Display a Listbox of city suggestions under the entry field:
+    - Map display names to lat/lon for selection
+    - Configure keyboard/mouse bindings for selection,
+      navigation, hover, and dismissal.
+        '''
+
         # Destroy old listbox if it exists
         if self.suggestions_listbox:
             self.suggestions_listbox.destroy()
@@ -401,8 +469,15 @@ class WeatherApp:
         # Bind Escape key to close suggestions box when inside as a result of using arrow keys and return focus to entry
         self.suggestions_listbox.bind("<Escape>", lambda e: (self.suggestions_listbox.destroy(), self.city_entry.focus_set()))
 
-        # Arrow key navigation inside the listbox
         def on_arrow_key(event):
+
+            '''
+    (nested) Listbox arrow-key handler:
+    - Up/Down to change selection in suggestions
+    - Wrap around at ends
+    - Prevent default event propagation
+            '''
+
             cur = self.suggestions_listbox.curselection()
             count = self.suggestions_listbox.size()
 
@@ -427,8 +502,14 @@ class WeatherApp:
         self.suggestions_listbox.bind("<Up>", on_arrow_key)
         self.suggestions_listbox.bind("<Down>", on_arrow_key)
 
-        # Hover behavior
         def on_hover(event):
+
+            '''
+    (nested) Mouse-motion handler for Listbox:
+    - Highlight the item under the cursor
+    - Clear highlight when leaving the widget area
+            '''
+
             index = self.suggestions_listbox.nearest(event.y)
             if 0 <= event.y <= self.suggestions_listbox.winfo_height():
                 self.suggestions_listbox.selection_clear(0, tk.END)
@@ -441,6 +522,13 @@ class WeatherApp:
         
 
     def on_suggestion_selected(self, event):
+
+        '''
+    Handle user selection from suggestions Listbox:
+    - Retrieve selected city display name
+    - Populate entry field and destroy Listbox
+        '''
+
         # If no suggestions listbox exists, exit early
         if not self.suggestions_listbox:
             return
@@ -458,6 +546,14 @@ class WeatherApp:
 
 
     def fetch_suggestions(self):
+
+        '''
+    Debounced trigger for fetching city suggestions:
+    - Skip queries shorter than 2 chars
+    - Spawn a background thread to call search_city_options(),
+      then schedule show_suggestions via root.after.
+        '''
+
         # Grab the query from the entry field
         query = self.city_entry.get().strip()
 
@@ -468,8 +564,14 @@ class WeatherApp:
                 self.suggestions_listbox = None
             return
 
-        # Background thread to fetch suggestions without freezing GUI
         def worker():
+
+            '''
+    (nested) Background thread target for fetch_suggestions:
+    - Call search_city_options(query)
+    - Schedule show_suggestions on the main thread
+            '''
+
             options = search_city_options(query)
             self.root.after(0, lambda: self.show_suggestions(options))
             
@@ -477,6 +579,14 @@ class WeatherApp:
 
 
     def on_typing(self, event):
+
+        '''
+    Entry-field key handler:
+    - Arrow-down focuses suggestions if present
+    - Ignore non-character control keys
+    - Debounce calls to fetch_suggestions()
+        '''
+
         # Allow Down key to move focus to suggestions listbox
         if event.keysym == "Down":
             return self.focus_suggestions(event)
@@ -497,6 +607,13 @@ class WeatherApp:
 
 
     def on_enter_key(self, event):
+        
+        '''
+    Return-key handler in entry field:
+    - If current text matches a suggestion, call get_weather()
+    - Otherwise, prompt the user to select from suggestions
+        '''
+
         # Get city input from entry field
         city_disp = self.city_entry.get().strip()
 
@@ -514,6 +631,12 @@ class WeatherApp:
 
 
     def focus_suggestions(self, event):
+
+        '''
+    If suggestions Listbox exists, move keyboard focus to it
+    and stop further event propagation.
+        '''
+
         # Keyboard navigation: move focus to the suggestions listbox if it exists
         if self.suggestions_listbox:
 
@@ -525,6 +648,14 @@ class WeatherApp:
 
 
     def start_auto_refresh(self):
+
+        '''
+    Kick off two timed loops:
+    1) update_timer (every 1s): decrement countdown and update label
+    2) refresh (every 60s): re-fetch weather if a city is selected,
+       else update refresh timestamp only, then reset countdown.
+        '''
+
         # Start countdown at 60 seconds for auto-refresh
         self.next_refresh_seconds = 60
 
@@ -536,8 +667,15 @@ class WeatherApp:
         else:
             self.last_refresh_time = "never"
 
-        # UI visual timer countdown updater
         def update_timer():
+
+            '''
+    (nested) Countdown updater:
+    - Decrement next_refresh_seconds each second
+    - Update refresh_label text
+    - Re-schedule itself after 1s
+            '''
+
             if self.next_refresh_seconds > 0:
                 self.next_refresh_seconds -= 1
 
@@ -549,8 +687,16 @@ class WeatherApp:
             # Schedule next 1-second update
             self.root.after(1000, update_timer)
 
-        # Main refresh loop that runs every 60 seconds
         def refresh():
+
+            '''
+    (nested) Auto-refresh loop:
+    - Every 60s, fetch new weather if a valid city is selected
+      or simply update the timestamp otherwise
+    - Write the new timestamp to file and update label
+    - Reset countdown and re-schedule itself after 60s
+            '''
+            
             city_disp = self.city_entry.get().strip()
             if city_disp and city_disp in self.suggestion_coords:
                 # Fetch new weather if city selected
