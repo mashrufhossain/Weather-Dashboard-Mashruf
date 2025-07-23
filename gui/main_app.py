@@ -33,7 +33,7 @@ from api import fetch_weather_by_coords, fetch_5day_forecast_by_coords, search_c
 # Feature tabs
 from features.history import create_history_tab, refresh_history, treeview_sort_column
 from features.stats import create_stats_tab, refresh_stats
-from features.forecast import create_forecast_tab, refresh_forecast
+from features.forecast import create_forecast_tab, refresh_forecast, update_forecast_units
 
 
 class WeatherApp:
@@ -62,6 +62,7 @@ class WeatherApp:
         self.refresh_stats = refresh_stats.__get__(self)
         self.create_forecast_tab = create_forecast_tab.__get__(self)
         self.refresh_forecast = refresh_forecast.__get__(self)
+        self.update_forecast_units = update_forecast_units.__get__(self)
 
         # Set up GUI widgets and tabs by calling the respective methods
         self.create_widgets()
@@ -182,7 +183,7 @@ class WeatherApp:
         # Refresh the displayed weather using the selected unit
         city = self.city_entry.get().strip()
         self.refresh_display(city, self.last_weather if hasattr(self, "last_weather") else None)
-        self.refresh_forecast(city)
+        self.update_forecast_units()
         self.refresh_history()
         self.refresh_stats()
 

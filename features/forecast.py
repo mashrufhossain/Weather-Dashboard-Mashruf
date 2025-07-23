@@ -6,7 +6,7 @@ Forecast UI module for Weather Dashboard.
 Defines functions to:
 - create_forecast_tab(self): Set up the forecast tab layout, including header, content blocks, and footer.
 - refresh_forecast(self, city=None): Clear old forecast, validate city input, fetch new forecast data, and populate blocks.
-- _make_forecast_block(parent, day, convert_temp_func, temp_unit): Build and return a styled frame for a single day's forecast.
+- make_forecast_block(parent, day, convert_temp_func, temp_unit): Build and return a styled frame for a single day's forecast.
 """
 
 import tkinter as tk                             # Tkinter for GUI widgets
@@ -117,7 +117,7 @@ def refresh_forecast(self, city=None):
         # Create and grid each day's forecast block
         def _populate():
             for i, day in enumerate(days):
-                dayblock = _make_forecast_block(
+                dayblock = make_forecast_block(
                     self.block_frame, day, self.convert_temp, self.temp_unit
                 )
                 dayblock.grid(
@@ -130,7 +130,7 @@ def refresh_forecast(self, city=None):
     threading.Thread(target=_worker, daemon=True).start()
 
 
-def _make_forecast_block(parent, day, convert_temp_func, temp_unit):
+def make_forecast_block(parent, day, convert_temp_func, temp_unit):
 
     '''
     Helper to build a styled Frame for one day's forecast data.
@@ -185,7 +185,10 @@ def _make_forecast_block(parent, day, convert_temp_func, temp_unit):
     tk.Label(content, text="----------------", font=("Helvetica Neue", 12), fg="#555", bg="#222").pack(pady=(4, 4), anchor="center")
 
     # Temperature range
-    tk.Label(content, text=f"{temp_min:.1f}{t_unit_symbol} - {temp_max:.1f}{t_unit_symbol}", font=("Helvetica Neue", 16, "bold"), fg="#ffe047", bg="#222").pack(pady=(0, 8), anchor="center")
+    temp_label = tk.Label(content, text=f"{temp_min:.1f}{t_unit_symbol} - {temp_max:.1f}{t_unit_symbol}", font=("Helvetica Neue", 16, "bold"), fg="#ffe047", bg="#222")
+    temp_label.pack(pady=(0, 8), anchor="center")
+    f.temp_label = temp_label
+    f.day_data    = day
 
     # Humidity
     tk.Label(content, text=f"Humidity: {day['humidity']}%", font=("Helvetica Neue", 15), fg="#bfffa5", bg="#222").pack(anchor="center")
@@ -197,3 +200,28 @@ def _make_forecast_block(parent, day, convert_temp_func, temp_unit):
     tk.Label(content, text=f"Visibility: {day.get('visibility', 'N/A')} km (max 10 km)", font=("Helvetica Neue", 15), fg="#a1e3ff", bg="#222").pack(anchor="center")
 
     return f     # Return the completed day block frame
+
+
+def update_forecast_units(self):
+
+    """
+    In‐place update of temperature labels for all 5-day forecast blocks,
+    toggling between Celsius and Fahrenheit without re-fetching data.
+    """
+    
+    # Select the appropriate unit symbol based on current setting
+    unit_symbol = "°C" if self.temp_unit == "C" else "°F"
+
+    # Loop over each existing forecast block frame
+    for block in self.forecast_blocks:
+        # Retrieve the original forecast data dict attached during block creation
+        forecast_data = block.day_data
+
+        # Convert the stored minimum and maximum temperatures to the new unit
+        converted_min = self.convert_temp(forecast_data['temp_min'])
+        converted_max = self.convert_temp(forecast_data['temp_max'])
+
+        # Update the label text directly on the widget to reflect new values
+        block.temp_label.config(
+            text=f"{converted_min:.1f}{unit_symbol} - {converted_max:.1f}{unit_symbol}"
+        )
