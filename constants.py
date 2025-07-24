@@ -7,6 +7,7 @@ Contains descriptive strings displayed at the bottom of each tab:
 - HISTORY_FOOTER: Guidance for the History tab (recent entries)
 - STATS_FOOTER: Explanation for the Statistics tab (summary data)
 - FORECAST_FOOTER: Note for the Forecast tab (predictive outlook)
+- TEA_SELECTOR_FOOTER: Explanation for the Tea Selector tab (personalized tea picks)
 """
 
 # Footer displayed in the History tab explaining its contents and sorting behavior
@@ -24,4 +25,9 @@ STATS_FOOTER = (
 # Footer displayed in the Forecast tab describing predictive data
 FORECAST_FOOTER = (
     "This tab displays a 5-day predictive forecast for the city entered."
+)
+
+# Footer displayed in the Tea Selector tab highlighting personalized tea matches
+TEA_SELECTOR_FOOTER = (
+    "Personalized tea picks based on weather: a cozy touch from our team favorites."
 )

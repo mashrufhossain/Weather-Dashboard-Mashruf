@@ -34,6 +34,7 @@ from api import fetch_weather_by_coords, fetch_5day_forecast_by_coords, search_c
 from features.history import create_history_tab, refresh_history, treeview_sort_column
 from features.stats import create_stats_tab, refresh_stats
 from features.forecast import create_forecast_tab, refresh_forecast, update_forecast_units
+from features.tea_selector import add_tea_selector_tab
 
 
 class WeatherApp:
@@ -283,6 +284,21 @@ class WeatherApp:
         self.refresh_history()
         self.refresh_stats()
         self.refresh_forecast(city_disp)
+
+        # Save index of currently selected tab
+        current_index = self.tabs.index(self.tabs.select())
+
+        # Remove the Tea Selector tab if it already exists
+        for i in range(self.tabs.index("end")):
+            if self.tabs.tab(i, option="text") == "Tea Selector":
+                self.tabs.forget(i)
+                break
+
+        # Add the refreshed Tea Selector tab
+        add_tea_selector_tab(self.tabs, self.last_weather)
+
+        # Restore the previously selected tab by index
+        self.tabs.select(current_index)
 
         # ✅ Update refresh time and store it
         self.last_refresh_time = time.strftime("%Y-%m-%d %H:%M:%S")

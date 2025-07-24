@@ -9,10 +9,10 @@ Provides functions to:
 - refresh_history: Load weather history entries from the database and populate the Treeview rows.
 """
 
-import tkinter as tk                       # Core Tkinter library for GUI components
-from tkinter import ttk                    # Themed widgets: Treeview and Style support
-from constants import HISTORY_FOOTER       # Footer text constant for the History tab
-from styles import NORMAL_FONT             # Standard font configuration for text elements
+import tkinter as tk                                   # Core Tkinter library for GUI components
+from tkinter import ttk                                # Themed widgets: Treeview and Style support
+from constants import HISTORY_FOOTER                   # Footer text constant for the history tab
+from styles import NORMAL_FONT, SMALL_FONT             # Standard font configuration for text elements
 
 
 def treeview_sort_column(self, tv, col, reverse):
@@ -106,7 +106,7 @@ def create_history_tab(self):
             command=lambda _col=col: treeview_sort_column(self, self.tree, _col, False))
 
     # Footer label with descriptive text at bottom of tab
-    self.history_footer = tk.Label(self.history_frame, text=HISTORY_FOOTER, font=NORMAL_FONT, fg="#fff", bg="black")
+    self.history_footer = tk.Label(self.history_frame, text=HISTORY_FOOTER, font=SMALL_FONT, fg="#fff", bg="black")
     self.history_footer.pack(side="bottom", pady=(0, 12))
 
 

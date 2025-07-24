@@ -9,7 +9,7 @@ Provides functions to:
 """
 
 import tkinter as tk                                       # Core Tkinter library for GUI components
-from constants import STATS_FOOTER                         # Footer text constant for the Statistics tab
+from constants import STATS_FOOTER                         # Footer text constant for the history statistics tab
 from styles import HEADER_FONT, NORMAL_FONT, SMALL_FONT    # Font styles for headings and labels
 
 
