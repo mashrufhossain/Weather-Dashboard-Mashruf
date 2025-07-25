@@ -7,8 +7,6 @@ Developed as a capstone project, it blends real-time weather data, statistical i
 
 ## 🚀 Features
 
-### 🌍 Core Functionalities
-
 - **Live Weather Fetching**  
   - Search any city to instantly see temperature, humidity, pressure, wind (with direction), visibility, sunrise/sunset, and conditions.  
   - Supports °C/°F toggle without refetching data.
@@ -51,37 +49,35 @@ Developed as a capstone project, it blends real-time weather data, statistical i
 
 ## 🗂️ File Structure
 
+```text
 Weather-Dashboard-Mashruf/
-├── .venv/ # Virtual environment (gitignored)
-|
-├── data/           # Local assets and logs
-│ ├── cold_weather_teas.csv
-│ ├── cloudy_weather_teas.csv
-│ ├── clear_weather_teas.csv
-│ ├── rainy_weather_teas.csv
-│ ├── tea1.jpg ... tea10.jpg
-│ ├── weather.db
-│ └── weather_history.csv
-│
-├── features/       # Core weather features
-│ ├── forecast.py
-│ ├── history.py
-│ ├── stats.py
-│ └── tea_selector.py
-│
-├── gui/            # UI management
-│ └── main_app.py
-│
-├── api.py                              # OpenWeatherMap API logic
-├── constants.py                        # Shared constants & settings
-├── db.py                               # SQLite logic
-├── main.py                             # App entry point
-├── styles.py                           # Colors and fonts
-├── utils.py                            # Helpers: unit conversion, direction, etc.
-├── .env                                # API key (gitignored)
-├── .gitignore                          # Venv, .env, and cache files
-├── requirements.txt                    # Project dependencies
-└── README.md                           # This file
+├── .venv/                             # Virtual environment (gitignored)
+├── data/                              # Local assets and logs
+│   ├── cold_weather_teas.csv
+│   ├── cloudy_weather_teas.csv
+│   ├── clear_weather_teas.csv
+│   ├── rainy_weather_teas.csv
+│   ├── tea1.jpg ... tea10.jpg
+│   ├── weather.db
+│   └── weather_history.csv
+├── features/                          # Core weather features
+│   ├── forecast.py
+│   ├── history.py
+│   ├── stats.py
+│   └── tea_selector.py
+├── gui/                               # UI management
+│   └── main_app.py
+├── api.py                             # OpenWeatherMap API logic
+├── constants.py                       # Shared constants & settings
+├── db.py                              # SQLite logic
+├── main.py                            # App entry point
+├── styles.py                          # Colors and fonts
+├── utils.py                           # Helpers: unit conversion, direction, etc.
+├── .env                               # API key (gitignored)
+├── .gitignore                         # Venv, .env, and cache files
+├── requirements.txt                   # Project dependencies
+└── README.md                          # This file
+```
 
 ---
 
