@@ -1,12 +1,4 @@
-# requirements.txt
-
-# Project dependencies for Weather Dashboard:
-# - requests: HTTP library for making API calls to OpenWeatherMap API
-# - python-dotenv: Loads environment variables from a .env file (e.g., API keys)
-# - pandas: For loading and manipulating CSV weather/tea data
-# - Pillow: For loading and displaying tea images (JPEGs)
-
 requests==2.31.0
 python-dotenv==1.0.1
 pandas==2.2.3
-Pillow==10.4
+Pillow==10.4.0
